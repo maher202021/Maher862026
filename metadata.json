@@ -1,0 +1,6 @@
+{
+  "name": "كل خدمات اليمن",
+  "description": "تطبيق الدليل والخدمات الشامل الأول في اليمن لجميع المهن والحرف، دليل فنيين ومقدمي خدمات مع مساعد ذكي ودعم غير متصل بالإنترنت وبوابة سرية.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
