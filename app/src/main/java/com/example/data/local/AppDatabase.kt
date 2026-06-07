@@ -1,175 +1,233 @@
 package com.example.data.local
 
+import android.content.ContentValues
 import android.content.Context
-import androidx.room.Database
-import androidx.room.Room
-import androidx.room.RoomDatabase
-import androidx.sqlite.db.SupportSQLiteDatabase
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
-@Database(
-    entities = [
-        CategoryEntity::class,
-        ServiceProviderEntity::class,
-        PendingProviderEntity::class,
-        BannerEntity::class,
-        ChatEntity::class,
-        MessageEntity::class,
-        AppConfigEntity::class,
-        LoyaltyPointsEntity::class,
-        ActivityLogEntity::class
-    ],
-    version = 1,
-    exportSchema = false
-)
-abstract class AppDatabase : RoomDatabase() {
-    abstract fun categoryDao(): CategoryDao
-    abstract fun serviceProviderDao(): ServiceProviderDao
-    abstract fun pendingProviderDao(): PendingProviderDao
-    abstract fun bannerDao(): BannerDao
-    abstract fun chatDao(): ChatDao
-    abstract fun appConfigDao(): AppConfigDao
-    abstract fun loyaltyPointsDao(): LoyaltyPointsDao
-    abstract fun activityLogDao(): ActivityLogDao
+class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_direct_db", null, 1) {
 
-    companion object {
-        @Volatile
-        private var INSTANCE: AppDatabase? = null
+    // --- Dynamic Reactive Streams ---
+    private val _approvedProvidersFlow = MutableStateFlow<List<Provider>>(emptyList())
+    val approvedProvidersFlow: Flow<List<Provider>> = _approvedProvidersFlow.asStateFlow()
 
-        fun getDatabase(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "yemen_services_db"
-                ).addCallback(DatabaseCallback(context))
-                 .fallbackToDestructiveMigration()
-                 .build()
-                INSTANCE = instance
-                instance
-            }
+    private val _pendingProvidersFlow = MutableStateFlow<List<Provider>>(emptyList())
+    val pendingProvidersFlow: Flow<List<Provider>> = _pendingProvidersFlow.asStateFlow()
+
+    private val _bookmarkedProvidersFlow = MutableStateFlow<List<Provider>>(emptyList())
+    val bookmarkedProvidersFlow: Flow<List<Provider>> = _bookmarkedProvidersFlow.asStateFlow()
+
+    private val _adminConfigFlow = MutableStateFlow<AdminConfig?>(null)
+    val adminConfigFlow: Flow<AdminConfig?> = _adminConfigFlow.asStateFlow()
+
+    private val _chatMessagesFlow = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val chatMessagesFlow: Flow<List<ChatMessage>> = _chatMessagesFlow.asStateFlow()
+
+    init {
+        // Trigger initial data load to populate streams
+        refreshData()
+    }
+
+    override fun onCreate(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE providers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                mainCategory TEXT NOT NULL,
+                subCategory TEXT NOT NULL,
+                city TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                whatsapp TEXT,
+                description TEXT,
+                rating REAL,
+                votes INTEGER,
+                isVerified INTEGER,
+                photoUri TEXT,
+                idPhotoUri TEXT,
+                gender TEXT,
+                registerDate INTEGER,
+                isBookmarked INTEGER,
+                isPending INTEGER
+            )
+        """.trimIndent())
+
+        db.execSQL("""
+            CREATE TABLE admin_config (
+                id INTEGER PRIMARY KEY,
+                registrationConditions TEXT,
+                welcomeMessage TEXT,
+                baseAppRateHourYER INTEGER,
+                fontSizeModifier REAL,
+                secretKey TEXT
+            )
+        """.trimIndent())
+
+        db.execSQL("""
+            CREATE TABLE chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender TEXT,
+                message TEXT,
+                timestamp INTEGER
+            )
+        """.trimIndent())
+
+        // Insert initial configuration
+        db.execSQL("""
+            INSERT INTO admin_config (id, registrationConditions, welcomeMessage, baseAppRateHourYER, fontSizeModifier, secretKey)
+            VALUES (1, 'اللائحة التنظيمية المفتوحة: 1. الأمانة والمصداقية المطلقة مع العملاء. 2. الالتزام بالمواعيد ومستوى جودة الخدمة. 3. كرت المهنة والبطاقة الشخصية اختيارية للتوثيق لكن تزيد فرصة ظهورك كمهني موثوق. 4. يحق للإدارة حظر أي حساب في حال وجود شكاوي متكررة.', 'أهلاً بك يا غالي! أنا أبو يمن مساعدك الذكي للتنظيف والكهرباء والسباكة وكل الحرف. كيف أقدر أساعدك اليوم بخصوص أعطال البيت أو تسعير الخدمات؟ 🛠️⚡', 4500, 1.0, '9999')
+        """.trimIndent())
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        db.execSQL("DROP TABLE IF EXISTS providers")
+        db.execSQL("DROP TABLE IF EXISTS admin_config")
+        db.execSQL("DROP TABLE IF EXISTS chat_messages")
+        onCreate(db)
+    }
+
+    // Refresh memory cache in streams
+    @Synchronized
+    fun refreshData() {
+        val db = readableDatabase ?: return
+
+        // Load Approved
+        val approved = mutableListOf<Provider>()
+        val pCursor = db.rawQuery("SELECT * FROM providers ORDER BY rating DESC, name ASC", null)
+        if (pCursor.moveToFirst()) {
+            do {
+                val prov = Provider(
+                    id = pCursor.getInt(pCursor.getColumnIndexOrThrow("id")),
+                    name = pCursor.getString(pCursor.getColumnIndexOrThrow("name")),
+                    mainCategory = pCursor.getString(pCursor.getColumnIndexOrThrow("mainCategory")),
+                    subCategory = pCursor.getString(pCursor.getColumnIndexOrThrow("subCategory")),
+                    city = pCursor.getString(pCursor.getColumnIndexOrThrow("city")),
+                    phone = pCursor.getString(pCursor.getColumnIndexOrThrow("phone")),
+                    whatsapp = pCursor.getString(pCursor.getColumnIndexOrThrow("whatsapp")) ?: "",
+                    description = pCursor.getString(pCursor.getColumnIndexOrThrow("description")) ?: "",
+                    rating = pCursor.getFloat(pCursor.getColumnIndexOrThrow("rating")),
+                    votes = pCursor.getInt(pCursor.getColumnIndexOrThrow("votes")),
+                    isVerified = pCursor.getInt(pCursor.getColumnIndexOrThrow("isVerified")) == 1,
+                    photoUri = pCursor.getString(pCursor.getColumnIndexOrThrow("photoUri")),
+                    idPhotoUri = pCursor.getString(pCursor.getColumnIndexOrThrow("idPhotoUri")),
+                    gender = pCursor.getString(pCursor.getColumnIndexOrThrow("gender")) ?: "ذكر",
+                    registerDate = pCursor.getLong(pCursor.getColumnIndexOrThrow("registerDate")),
+                    isBookmarked = pCursor.getInt(pCursor.getColumnIndexOrThrow("isBookmarked")) == 1,
+                    isPending = pCursor.getInt(pCursor.getColumnIndexOrThrow("isPending")) == 1
+                )
+                approved.add(prov)
+            } while (pCursor.moveToNext())
         }
-    }
+        pCursor.close()
 
-    private class DatabaseCallback(
-        private val context: Context
-    ) : RoomDatabase.Callback() {
-        override fun onCreate(db: SupportSQLiteDatabase) {
-            super.onCreate(db)
-            // Seed database inside a coroutine
-            CoroutineScope(Dispatchers.IO).launch {
-                val database = getDatabase(context)
-                seedInitialData(database)
-            }
+        _approvedProvidersFlow.value = approved.filter { !it.isPending }
+        _pendingProvidersFlow.value = approved.filter { it.isPending }
+        _bookmarkedProvidersFlow.value = approved.filter { it.isBookmarked && !it.isPending }
+
+        // Load Config
+        var config: AdminConfig? = null
+        val cCursor = db.rawQuery("SELECT * FROM admin_config WHERE id = 1", null)
+        if (cCursor.moveToFirst()) {
+            config = AdminConfig(
+                id = cCursor.getInt(cCursor.getColumnIndexOrThrow("id")),
+                registrationConditions = cCursor.getString(cCursor.getColumnIndexOrThrow("registrationConditions")),
+                welcomeMessage = cCursor.getString(cCursor.getColumnIndexOrThrow("welcomeMessage")),
+                baseAppRateHourYER = cCursor.getInt(cCursor.getColumnIndexOrThrow("baseAppRateHourYER")),
+                fontSizeModifier = cCursor.getFloat(cCursor.getColumnIndexOrThrow("fontSizeModifier")),
+                secretKey = cCursor.getString(cCursor.getColumnIndexOrThrow("secretKey"))
+            )
         }
-    }
-}
+        cCursor.close()
+        _adminConfigFlow.value = config
 
-suspend fun seedInitialData(db: AppDatabase) {
-    // 1. Seed Categories
-    val defaultCategories = listOf(
-        CategoryEntity(name = "كهربائي منازل", groupName = "صيانة منزلية", iconName = "ElectricalServices", isPinned = true),
-        CategoryEntity(name = "سباك صحي", groupName = "صيانة منزلية", iconName = "Plumbing", isPinned = true),
-        CategoryEntity(name = "نجار وديكور", groupName = "صيانة منزلية", iconName = "Handyman", isPinned = false),
-        CategoryEntity(name = "مهندس مكيفات", groupName = "صيانة منزلية", iconName = "AcUnit", isPinned = false),
-        CategoryEntity(name = "صيانة جوالات", groupName = "برمجيات وتقنية", iconName = "PhonelinkSetup", isPinned = true),
-        CategoryEntity(name = "مهندس كمبيوتر", groupName = "برمجيات وتقنية", iconName = "Computer", isPinned = false),
-        CategoryEntity(name = "ميكانيكي سيارات", groupName = "سيارات ومحركات", iconName = "DirectionsCar", isPinned = true),
-        CategoryEntity(name = "كهربائي سيارات", groupName = "سيارات ومحركات", iconName = "FlashOn", isPinned = false),
-        CategoryEntity(name = "تمريض منزلي", groupName = "رعاية طبية", iconName = "LocalHospital", isPinned = false),
-        CategoryEntity(name = "مدرس منزلي", groupName = "تعليم وتدريس", iconName = "School", isPinned = false)
-    )
-    for (cat in defaultCategories) {
-        db.categoryDao().insertCategory(cat)
-    }
-
-    // 2. Seed Banners (Marquee & Banner Promos)
-    val defaultBanners = listOf(
-        BannerEntity(
-            title = "خصم خاص على خدمات التكييف والتهوية",
-            type = "صورة",
-            contentUrl = "https://images.unsplash.com/photo-1517649763962-0c623066013b?w=600",
-            textMessage = "صيانة فورية ومضمونة بخصم 20% لفترة محدودة",
-            link = "https://wa.me/777644670",
-            durationSeconds = 6,
-            isActive = true
-        ),
-        BannerEntity(
-            title = "نخبة VIP فني جوالات وحواسيب",
-            type = "نص",
-            textMessage = "تم انضمام م. ماهر كأفضل مبرمج وصيانة برمجيات في اليمن بضمان معتمد وجاهزية تامة.",
-            link = "tel:777644670",
-            durationSeconds = 4,
-            isActive = true
-        )
-    )
-    for (banner in defaultBanners) {
-        db.bannerDao().insertBanner(banner)
+        // Load Chat History
+        val messages = mutableListOf<ChatMessage>()
+        val mCursor = db.rawQuery("SELECT * FROM chat_messages ORDER BY timestamp ASC", null)
+        if (mCursor.moveToFirst()) {
+            do {
+                messages.add(
+                    ChatMessage(
+                        id = mCursor.getInt(mCursor.getColumnIndexOrThrow("id")),
+                        sender = mCursor.getString(mCursor.getColumnIndexOrThrow("sender")),
+                        message = mCursor.getString(mCursor.getColumnIndexOrThrow("message")),
+                        timestamp = mCursor.getLong(mCursor.getColumnIndexOrThrow("timestamp"))
+                    )
+                )
+            } while (mCursor.moveToNext())
+        }
+        mCursor.close()
+        _chatMessagesFlow.value = messages
     }
 
-    // 3. Seed Service Providers (VIP + Moosa Behem)
-    val defaultProviders = listOf(
-        ServiceProviderEntity(
-            name = "المهندس ماهر علوان",
-            mainCategory = "برمجيات وتقنية",
-            subCategory = "صيانة جوالات",
-            rating = 4.9,
-            price = "تبدأ من 3000 ريال",
-            location = "صنعاء - حدة",
-            latitude = 15.3340,
-            longitude = 44.1950,
-            phone = "777644670",
-            whatsapp = "777644670",
-            isVip = true,
-            isRecommended = true,
-            isVerified = true,
-            notes = "معتمد في فك الشفرات، برمجة وعمل سوفت وير لكافة الأجهزة الذكية."
-        ),
-        ServiceProviderEntity(
-            name = "الأسطى ناصر السباك",
-            mainCategory = "صيانة منزلية",
-            subCategory = "سباك صحي",
-            rating = 4.7,
-            price = "تبدأ من 5000 ريال",
-            location = "صنعاء - التحرير",
-            latitude = 15.3520,
-            longitude = 44.1880,
-            phone = "736462777",
-            whatsapp = "736462777",
-            isVip = false,
-            isRecommended = true,
-            isVerified = true,
-            notes = "تأسيس وصيانة شبكات المياه والصرف الصحي الداخلي والخارجي بجودة عالية وإتقان."
-        ),
-        ServiceProviderEntity(
-            name = "الأستاذ أحمد معلم كهرباء",
-            mainCategory = "صيانة منزلية",
-            subCategory = "كهربائي منازل",
-            rating = 4.8,
-            price = "تبدأ من 4000 ريال",
-            location = "صنعاء - الستين",
-            latitude = 15.3560,
-            longitude = 44.1720,
-            phone = "777123456",
-            whatsapp = "777123456",
-            isVip = true,
-            isRecommended = false,
-            isVerified = true,
-            notes = "تركيب وإصلاح شبكات الكهرباء المنزلية والإنارة الحديثة وأنظمة الطاقة الشمسية."
-        )
-    )
-    for (p in defaultProviders) {
-        db.serviceProviderDao().insertProvider(p)
+    // --- Mutations ---
+    @Synchronized
+    fun insertProvider(p: Provider) {
+        val db = writableDatabase ?: return
+        val cv = ContentValues().apply {
+            if (p.id != 0) {
+                put("id", p.id)
+            }
+            put("name", p.name)
+            put("mainCategory", p.mainCategory)
+            put("subCategory", p.subCategory)
+            put("city", p.city)
+            put("phone", p.phone)
+            put("whatsapp", p.whatsapp)
+            put("description", p.description)
+            put("rating", p.rating)
+            put("votes", p.votes)
+            put("isVerified", if (p.isVerified) 1 else 0)
+            put("photoUri", p.photoUri)
+            put("idPhotoUri", p.idPhotoUri)
+            put("gender", p.gender)
+            put("registerDate", p.registerDate)
+            put("isBookmarked", if (p.isBookmarked) 1 else 0)
+            put("isPending", if (p.isPending) 1 else 0)
+        }
+        db.insertWithOnConflict("providers", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        refreshData()
     }
 
-    // 4. Seed App Config
-    db.appConfigDao().insertConfig(AppConfigEntity())
+    @Synchronized
+    fun deleteProvider(p: Provider) {
+        val db = writableDatabase ?: return
+        db.delete("providers", "id = ?", arrayOf(p.id.toString()))
+        refreshData()
+    }
 
-    // 5. Seed Loyalty Points
-    db.loyaltyPointsDao().insertPoints(LoyaltyPointsEntity(points = 150))
+    @Synchronized
+    fun insertAdminConfig(config: AdminConfig) {
+        val db = writableDatabase ?: return
+        val cv = ContentValues().apply {
+            put("id", 1)
+            put("registrationConditions", config.registrationConditions)
+            put("welcomeMessage", config.welcomeMessage)
+            put("baseAppRateHourYER", config.baseAppRateHourYER)
+            put("fontSizeModifier", config.fontSizeModifier)
+            put("secretKey", config.secretKey)
+        }
+        db.insertWithOnConflict("admin_config", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+        refreshData()
+    }
 
-    // 6. Seed initial log
-    db.activityLogDao().insertLog(ActivityLogEntity(action = "تهيئة أولية لتطبيق كل خدمات اليمن وتنشيط البيانات الافتراضية"))
+    @Synchronized
+    fun insertChatMessage(sender: String, message: String) {
+        val db = writableDatabase ?: return
+        val cv = ContentValues().apply {
+            put("sender", sender)
+            put("message", message)
+            put("timestamp", System.currentTimeMillis())
+        }
+        db.insert("chat_messages", null, cv)
+        refreshData()
+    }
+
+    @Synchronized
+    fun clearChatHistory() {
+        val db = writableDatabase ?: return
+        db.execSQL("DELETE FROM chat_messages")
+        refreshData()
+    }
 }
