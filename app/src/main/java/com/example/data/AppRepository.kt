@@ -27,6 +27,14 @@ class AppRepository(private val db: AppDatabase) {
         db.deleteProvider(provider)
     }
 
+    fun exportDatabaseBackup(): String {
+        return db.exportBackupJson()
+    }
+
+    fun importDatabaseBackup(json: String): Boolean {
+        return db.importBackupJson(json)
+    }
+
     suspend fun toggleBookmark(provider: Provider) {
         db.insertProvider(provider.copy(isBookmarked = !provider.isBookmarked))
     }

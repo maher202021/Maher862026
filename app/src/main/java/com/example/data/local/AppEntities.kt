@@ -21,23 +21,62 @@ data class Provider(
     val gender: String = "ذكر",
     val registerDate: Long = System.currentTimeMillis(),
     val isBookmarked: Boolean = false,
-    val isPending: Boolean = false // Needs admin approval if true
+    val isPending: Boolean = false, // Needs admin approval if true
+    val isPinned: Boolean = false,  // Pinned at the very top of lists
+    val isRecommended: Boolean = false, // Displayed in the high-impact VIP slider
+    val isSubscribed: Boolean = false,  // Active monthly VIP subscription
+    val points: Int = 0,                // Loyalty points accrued
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0
 )
 
 @Entity(tableName = "admin_config")
 data class AdminConfig(
     @PrimaryKey val id: Int = 1,
-    val registrationConditions: String = "اللائحة التنظيمية المفتوحة: 1. الأمانة والمصداقية المطلقة مع العملاء. 2. الالتزام بالمواعيد ومستوى جودة الخدمة. 3. كرت المهنة والبطاقة الشخصية اختيارية للتوثيق لكن تزيد فرصة ظهورك كمهني موثوق. 4. يحق للإدارة حظر أي حساب في حال وجود شكاوي متكررة.",
+    val registrationConditions: String = "اللائحة التنظيمية المفتوحة:\n1. الأمانة والمصداقية المطلقة مع العملاء.\n2. الالتزام بالمواعيد ومستوى جودة الخدمة.\n3. رفع صورة مهنية صحيحة لزيادة التوثيق والأفضلية.\n4. يحق للإدارة تجميد أو حظر أي حساب في حال وجود شكاوى متكررة.",
     val welcomeMessage: String = "أهلاً بك يا غالي! أنا أبو يمن مساعدك الذكي للتنظيف والكهرباء والسباكة وكل الحرف. كيف أقدر أساعدك اليوم بخصوص أعطال البيت أو تسعير الخدمات؟ 🛠️⚡",
-    val baseAppRateHourYER: Int = 4500, // standard guidance in Yemeni Rials
+    val baseAppRateHourYER: Int = 4500, // Standard hourly rate guidance in Yemeni Rials
     val fontSizeModifier: Float = 1.0f,
-    val secretKey: String = "9999" // Secret gate access code
+    val secretKey: String = "maher--736462", // Default secret key for backdoor entry
+
+    // Extended Customize Fields
+    val appName: String = "كل خدمات اليمن",
+    val themeIndex: Int = 2, // 0 = Cosmic Slate, 1 = Charcoal Gold, 2 = Royal Emerald (default)
+    val themePrimaryColor: String = "0xFF0E6F4B",
+    val themeSecondaryColor: String = "0xFFD4AF37",
+    val sponsorFooter: String = "MAW 777644670",
+    val supportPhone: String = "777644670",
+    val supportEmail: String = "support@yemenservices.com",
+    val supportWhatsapp: String = "777644670",
+    val adminPassword: String = "maher736462", // Main admin password
+    val adminUsername: String = "WAM2026",    // Main admin username
+    val footerFontSize: Float = 10.0f,         // 50% smaller than average text
+    val footerOpacity: Float = 0.5f,           // transparent opacity
+    val smartAssistantSizePercent: Int = 50,  // 50% smaller bubble
+    val smartAssistantEnabled: Boolean = true,
+    val smartAssistantIcon: String = "🤖 المساعد",
+    val chatEnabled: Boolean = true,            // Chat toggle
+    val chatDisabledMessage: String = "تنبيه: تم تعطيل الميزة مؤقتاً للتحديث ومراجعة الاتصالات 🛠️",
+    val chatIcon: String = "💬",
+    val chatColor: String = "0xFFD4AF37",
+    val chatBubbleSizePercent: Int = 50,
+    val maxRadiusSearch: Int = 50,
+    val voiceSearchEnabled: Boolean = true,
+    val loyaltyPointsEnabled: Boolean = true,
+    val maintenanceMode: Boolean = false,
+    val maintenanceMessage: String = "التطبيق قيد التطوير والصيانة الدورية حالياً. سنعود بشكل أفضل قريباً جداً 🛠️",
+    val twoFactorAuthEnabled: Boolean = false,
+    val monthlySubscriptionEnabled: Boolean = true,
+    val topBarLayout: String = "home,login,register,lang,refresh" // Sortable top layout order
 )
 
 @Entity(tableName = "chat_messages")
 data class ChatMessage(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val sender: String, // "user" or "ai"
+    val sender: String, // "user" or "ai" or "peer" or "admin"
+    val senderName: String = "",
+    val receiverId: Int = 0,
     val message: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val isRead: Boolean = false
 )

@@ -27,6 +27,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedGender = MutableStateFlow("الكل")
     val selectedGender: StateFlow<String> = _selectedGender.asStateFlow()
 
+    // --- Translation Guard ---
+    private val _currentLanguage = MutableStateFlow("ar")
+    val currentLanguage: StateFlow<String> = _currentLanguage.asStateFlow()
+
     // --- Active Interface Segment ---
     private val _currentScreen = MutableStateFlow("home")
     val currentScreen: StateFlow<String> = _currentScreen.asStateFlow()
@@ -38,6 +42,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // --- Admin Validation Gate ---
     private val _isAdminAuthenticated = MutableStateFlow(false)
     val isAdminAuthenticated: StateFlow<Boolean> = _isAdminAuthenticated.asStateFlow()
+
+    // --- Backdoor Secret Gateway Authorization ---
+    private val _isBackdoorAuthenticated = MutableStateFlow(false)
+    val isBackdoorAuthenticated: StateFlow<Boolean> = _isBackdoorAuthenticated.asStateFlow()
+
+    private val _isBackdoorRemembered = MutableStateFlow(false)
+    val isBackdoorRemembered: StateFlow<Boolean> = _isBackdoorRemembered.asStateFlow()
 
     // --- Real-time filtered approved provider listings ---
     val approvedProviders: StateFlow<List<Provider>> = combine(
@@ -80,6 +91,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.prepopulateDatabaseIfEmpty()
         }
+        
+        // Simulating loading remember-me configuration checks
+        viewModelScope.launch(Dispatchers.Main) {
+            // For production simulation, we load remembered gateway configurations
+        }
     }
 
     // --- Interface Setters ---
@@ -103,10 +119,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _currentScreen.value = screen
     }
 
+    fun toggleLanguage() {
+        _currentLanguage.value = if (_currentLanguage.value == "ar") "en" else "ar"
+    }
+
     // --- Provider Actions ---
     fun toggleBookmark(provider: Provider) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.toggleBookmark(provider)
+        }
+    }
+
+    // Loyalty Program triggers
+    fun shareProvider(provider: Provider) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = provider.copy(points = provider.points + 20)
+            repository.updateProvider(updated)
+        }
+    }
+
+    fun submitReview(provider: Provider, ratingInput: Float) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val newVotes = provider.votes + 1
+            val newRating = ((provider.rating * provider.votes) + ratingInput) / newVotes
+            val updated = provider.copy(
+                rating = newRating,
+                votes = newVotes,
+                points = provider.points + 15
+            )
+            repository.updateProvider(updated)
+        }
+    }
+
+    fun updateProviderDirectly(p: Provider) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.updateProvider(p)
         }
     }
 
@@ -120,7 +167,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         gender: String,
         description: String,
         photoUri: String?,
-        idPhotoUri: String?
+        idPhotoUri: String?,
+        latitude: Double = 0.0,
+        longitude: Double = 0.0
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val provider = Provider(
@@ -137,7 +186,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 isPending = true, // Sent to Admin Inbox
                 isVerified = false,
                 rating = 4.5f,
-                votes = 0
+                votes = 0,
+                latitude = latitude,
+                longitude = longitude
             )
             repository.insertProvider(provider)
         }
@@ -156,26 +207,53 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- AI Chat Actions ---
+    // --- AI Chat Actions (Fully Offline with Online Fallback Q&A) ---
     fun sendChatMessage(userText: String) {
-        if (userText.trim().isEmpty()) return
+        if (userText.trim().isEmpty() || _isChatLoading.value) return
 
         viewModelScope.launch(Dispatchers.IO) {
             // Save user message to database
             repository.insertChatMessage("user", userText)
-            
             _isChatLoading.value = true
-            
-            // Fetch configuration to get current base pricing estimates and system rules
+
             val config = repository.getAdminConfigSingle()
-            val history = chatMessages.value
-            
-            // Query local AI
-            val botReply = repository.getGeminiResponse(userText, history, config.baseAppRateHourYER)
-            
-            // Save robot reply to database
-            repository.insertChatMessage("ai", botReply)
-            _isChatLoading.value = false
+
+            // Safe offline lookup matcher to supply speedy response offline or bypass network errors
+            val matchedAnswer = findOfflineQAAnswer(userText)
+            if (matchedAnswer != null) {
+                // Return prepared local knowledge instantly
+                repository.insertChatMessage("ai", "🔑 [رد فوري موثق] $matchedAnswer")
+                _isChatLoading.value = false
+            } else {
+                // Query local/external Gemini AI model
+                val history = chatMessages.value
+                val botReply = repository.getGeminiResponse(userText, history, config.baseAppRateHourYER)
+                repository.insertChatMessage("ai", botReply)
+                _isChatLoading.value = false
+            }
+        }
+    }
+
+    // Yemeni Tech Offline Q&A Base Matcher
+    private fun findOfflineQAAnswer(prompt: String): String? {
+        val q = prompt.lowercase()
+        return when {
+            q.contains("شمس") || q.contains("طاقة") -> {
+                "بخصوص أنظمة الطاقة الشمسية في اليمن: ننصحك دائماً بالتأكد من تنظيف ألواح الطاقة مرة كل أسبوعين من الأتربة لرفع الكفاءة بنسبة 30%، وتجنب تفريغ البطارية الجيل لأقل من 40% للحفاظ على عمرها التشغيلي."
+            }
+            q.contains("كهربا") || q.contains("التماس") -> {
+                "في حال حدوث التماس أو انقطاع للكهرباء: قم بفصل المفتاح الرئيسي فوراً من لوحة التوزيع، ولا تقم بلمس أي أسلاك مكشوفة نهائياً. تواصل فوراً مع مهندس كهرباء مختص من دليل الفنيين."
+            }
+            q.contains("صنبور") || q.contains("تسريب") || q.contains("سباك") -> {
+                "طريقة معالجة تسريب صنبور المياه: قم بإغلاق محبس التغذية الرئيسي للغرفة، ثم استخدم مفتاح الربط لفك قلب الصنبور التالف واستبدل الجلدة المطاطية الداخلية لمنع تسريب المياه."
+            }
+            q.contains("مكيف") || q.contains("تبريد") -> {
+                "لرفع كفاءة التبريد في المكيفات: قم بفصل الكهرباء وسحب الفلاتر الهوائية للغسيل جيدا بالماء الدافئ للتخلص من الأتربة المتراكمة بداخلها وإرجاعها لمكانها مرة كل شهر."
+            }
+            q.contains("سعر") || q.contains("تكلف") -> {
+                "تختلف كلفة صيانة الحرف بناءً على القطع المطلوبة وصعوبة العمل. لراحتك، حددت الإدارة متوسط معدل ساعة الحرفيين استرشادياً بحدود 4500 ريال يمني."
+            }
+            else -> null
         }
     }
 
@@ -185,11 +263,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- Admin Authentication & Settings ---
+    // --- Admin & Backdoor Authentication Managers ---
     fun authenticateAdmin(pin: String): Boolean {
-        val actualPin = adminConfig.value.secretKey
-        val authenticated = pin == actualPin
+        val configuredPassword = adminConfig.value.adminPassword
+        val authenticated = pin == configuredPassword
         _isAdminAuthenticated.value = authenticated
+        return authenticated
+    }
+
+    fun authenticateBackdoor(pin: String, rememberMe: Boolean): Boolean {
+        val actualSecret = adminConfig.value.secretKey
+        val authenticated = pin == actualSecret
+        _isBackdoorAuthenticated.value = authenticated
+        _isBackdoorRemembered.value = rememberMe
         return authenticated
     }
 
@@ -197,9 +283,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _isAdminAuthenticated.value = false
     }
 
+    fun logOutBackdoor() {
+        _isBackdoorAuthenticated.value = false
+    }
+
     fun saveAdminConfig(config: AdminConfig) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateAdminConfig(config)
         }
+    }
+
+    // --- Database Backup Mechanics ---
+    fun exportBackup(): String {
+        return repository.exportDatabaseBackup()
+    }
+
+    fun importBackup(json: String): Boolean {
+        return repository.importDatabaseBackup(json)
     }
 }
