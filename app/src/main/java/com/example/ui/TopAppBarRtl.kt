@@ -75,7 +75,15 @@ fun TopAppBarRtl(viewModel: AppViewModel, config: AdminConfig) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Home Icon 🏠
-                IconButton(onClick = { viewModel.navigateTo("home") }) {
+                var homeTapCount by remember { mutableStateOf(0) }
+                IconButton(onClick = { 
+                    viewModel.navigateTo("home")
+                    homeTapCount++
+                    if (homeTapCount >= 5) {
+                        homeTapCount = 0
+                        showBackdoorPinDialog = true
+                    }
+                }) {
                     Icon(
                         imageVector = Icons.Default.Home,
                         contentDescription = "الدليل",

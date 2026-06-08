@@ -47,8 +47,8 @@ class AppRepository(private val db: AppDatabase) {
         db.insertAdminConfig(config)
     }
 
-    suspend fun insertChatMessage(sender: String, text: String) {
-        db.insertChatMessage(sender, text)
+    suspend fun insertChatMessage(sender: String, text: String, senderName: String = "", receiverId: Int = 0) {
+        db.insertChatMessage(sender, text, senderName, receiverId)
     }
 
     suspend fun clearChat() {

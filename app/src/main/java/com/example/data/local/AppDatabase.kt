@@ -33,7 +33,9 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
     // Local Bookmarks mapping
     private val _bookmarkedIds = MutableStateFlow<Set<Int>>(emptySet())
     private var cachedRemoteProviders: List<Provider> = emptyList()
-    private var providersListener: ListenerRegistration? = null
+    private var providersListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var configListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var chatsListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     init {
         // Initialize Firebase manually
@@ -60,6 +62,9 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
 
         // Setup real-time Firestore listener
         setupFirestoreSnapshotListener()
+
+        // Start tracking connection for force reconnection
+        monitorInternetConnection(context)
 
         // Trigger initial data load to populate streams
         refreshData()
@@ -283,9 +288,98 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
         updateProviderFlows(cachedRemoteProviders)
     }
 
+    fun refreshSnapshotListeners() {
+        try {
+            providersListener?.remove()
+            configListener?.remove()
+            chatsListener?.remove()
+
+            providersListener = null
+            configListener = null
+            chatsListener = null
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
+        setupFirestoreSnapshotListener()
+    }
+
+    private fun monitorInternetConnection(context: Context) {
+        try {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            if (connectivityManager != null) {
+                val networkRequest = android.net.NetworkRequest.Builder()
+                    .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build()
+                
+                connectivityManager.registerNetworkCallback(networkRequest, object : android.net.ConnectivityManager.NetworkCallback() {
+                    private var wasDisconnected = false
+
+                    override fun onAvailable(network: android.net.Network) {
+                        super.onAvailable(network)
+                        if (wasDisconnected) {
+                            // Internet returned back, force refresh listeners
+                            refreshSnapshotListeners()
+                            wasDisconnected = false
+                        }
+                    }
+
+                    override fun onLost(network: android.net.Network) {
+                        super.onLost(network)
+                        wasDisconnected = true
+                    }
+                })
+            }
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
+    }
+
+    private fun mapToAdminConfig(map: Map<String, Any>?): AdminConfig {
+        if (map == null) return AdminConfig()
+        return AdminConfig(
+            id = 1,
+            registrationConditions = map["registrationConditions"] as? String ?: "",
+            welcomeMessage = map["welcomeMessage"] as? String ?: "",
+            baseAppRateHourYER = (map["baseAppRateHourYER"] as? Long ?: 4500L).toInt(),
+            fontSizeModifier = (map["fontSizeModifier"] as? Double ?: 1.0).toFloat(),
+            secretKey = map["secretKey"] as? String ?: "maher--736462",
+            appName = map["appName"] as? String ?: "كل خدمات اليمن",
+            themeIndex = (map["themeIndex"] as? Long ?: 2L).toInt(),
+            themePrimaryColor = map["themePrimaryColor"] as? String ?: "0xFF0E6F4B",
+            themeSecondaryColor = map["themeSecondaryColor"] as? String ?: "0xFFD4AF37",
+            sponsorFooter = map["sponsorFooter"] as? String ?: "MAW 777644670",
+            supportPhone = map["supportPhone"] as? String ?: "777644670",
+            supportEmail = map["supportEmail"] as? String ?: "support@yemenservices.com",
+            supportWhatsapp = map["supportWhatsapp"] as? String ?: "777644670",
+            adminPassword = map["adminPassword"] as? String ?: "maher736462",
+            adminUsername = map["adminUsername"] as? String ?: "WAM2026",
+            footerFontSize = (map["footerFontSize"] as? Double ?: 10.0).toFloat(),
+            footerOpacity = (map["footerOpacity"] as? Double ?: 0.5).toFloat(),
+            smartAssistantSizePercent = (map["smartAssistantSizePercent"] as? Long ?: 50L).toInt(),
+            smartAssistantEnabled = map["smartAssistantEnabled"] as? Boolean ?: true,
+            smartAssistantIcon = map["smartAssistantIcon"] as? String ?: "🤖 المساعد",
+            chatEnabled = map["chatEnabled"] as? Boolean ?: true,
+            chatDisabledMessage = map["chatDisabledMessage"] as? String ?: "تنبيه: تم تعطيل الميزة مؤقتاً للتحديث ومراجعة الاتصالات 🛠️",
+            chatIcon = map["chatIcon"] as? String ?: "💬",
+            chatColor = map["chatColor"] as? String ?: "0xFFD4AF37",
+            chatBubbleSizePercent = (map["chatBubbleSizePercent"] as? Long ?: 50L).toInt(),
+            maxRadiusSearch = (map["maxRadiusSearch"] as? Long ?: 50L).toInt(),
+            voiceSearchEnabled = map["voiceSearchEnabled"] as? Boolean ?: true,
+            loyaltyPointsEnabled = map["loyaltyPointsEnabled"] as? Boolean ?: true,
+            maintenanceMode = map["maintenanceMode"] as? Boolean ?: false,
+            maintenanceMessage = map["maintenanceMessage"] as? String ?: "التطبيق قيد التطوير والصيانة الدورية حالياً...",
+            twoFactorAuthEnabled = map["twoFactorAuthEnabled"] as? Boolean ?: false,
+            monthlySubscriptionEnabled = map["monthlySubscriptionEnabled"] as? Boolean ?: true,
+            topBarLayout = map["topBarLayout"] as? String ?: "home,login,register,lang,refresh"
+        )
+    }
+
     private fun setupFirestoreSnapshotListener() {
         try {
             val firestore = FirebaseFirestore.getInstance()
+
+            // 1. Providers Listener (Unsubscribe old first explicitly)
+            providersListener?.remove()
             providersListener = firestore.collection("providers")
                 .addSnapshotListener { snapshots, e ->
                     if (snapshotErrorGate(e)) return@addSnapshotListener
@@ -303,6 +397,45 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                         updateProviderFlows(providersList)
                     }
                 }
+
+            // 2. Identity & Configuration Sync Listener
+            configListener?.remove()
+            configListener = firestore.collection("settings").document("admin_config")
+                .addSnapshotListener { snapshot, e ->
+                    if (snapshot != null && snapshot.exists()) {
+                        try {
+                            val remoteConfig = mapToAdminConfig(snapshot.data)
+                            insertAdminConfigLocalOnly(remoteConfig)
+                        } catch (ex: Exception) {
+                            ex.printStackTrace()
+                        }
+                    }
+                }
+
+            // 3. Real-Time Chat Sync Listener (Ordering Messages by timestamp)
+            chatsListener?.remove()
+            chatsListener = firestore.collection("messages")
+                .orderBy("timestamp")
+                .addSnapshotListener { snapshot, e ->
+                    if (snapshot != null) {
+                        val list = mutableListOf<ChatMessage>()
+                        for (doc in snapshot.documents) {
+                            try {
+                                val idVal = (doc.getLong("id") ?: 0L).toInt()
+                                val sender = doc.getString("sender") ?: "user"
+                                val senderName = doc.getString("senderName") ?: ""
+                                val receiverIdValue = (doc.getLong("receiverId") ?: 0L).toInt()
+                                val message = doc.getString("message") ?: ""
+                                val tempTimestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
+                                list.add(ChatMessage(idVal, sender, senderName, receiverIdValue, message, tempTimestamp, false))
+                            } catch (ex: Exception) {
+                                ex.printStackTrace()
+                            }
+                        }
+                        _chatMessagesFlow.value = list
+                    }
+                }
+
         } catch (ex: Exception) {
             ex.printStackTrace()
         }
@@ -527,7 +660,7 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
     }
 
     @Synchronized
-    fun insertAdminConfig(config: AdminConfig) {
+    fun insertAdminConfigLocalOnly(config: AdminConfig) {
         val db = writableDatabase ?: return
         val cv = ContentValues().apply {
             put("id", 1)
@@ -569,6 +702,56 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
         refreshData()
     }
 
+    private fun insertAdminConfigFirestore(config: AdminConfig) {
+        try {
+            val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val map = mapOf(
+                "registrationConditions" to config.registrationConditions,
+                "welcomeMessage" to config.welcomeMessage,
+                "baseAppRateHourYER" to config.baseAppRateHourYER.toLong(),
+                "fontSizeModifier" to config.fontSizeModifier.toDouble(),
+                "secretKey" to config.secretKey,
+                "appName" to config.appName,
+                "themeIndex" to config.themeIndex.toLong(),
+                "themePrimaryColor" to config.themePrimaryColor,
+                "themeSecondaryColor" to config.themeSecondaryColor,
+                "sponsorFooter" to config.sponsorFooter,
+                "supportPhone" to config.supportPhone,
+                "supportEmail" to config.supportEmail,
+                "supportWhatsapp" to config.supportWhatsapp,
+                "adminPassword" to config.adminPassword,
+                "adminUsername" to config.adminUsername,
+                "footerFontSize" to config.footerFontSize.toDouble(),
+                "footerOpacity" to config.footerOpacity.toDouble(),
+                "smartAssistantSizePercent" to config.smartAssistantSizePercent.toLong(),
+                "smartAssistantEnabled" to config.smartAssistantEnabled,
+                "smartAssistantIcon" to config.smartAssistantIcon,
+                "chatEnabled" to config.chatEnabled,
+                "chatDisabledMessage" to config.chatDisabledMessage,
+                "chatIcon" to config.chatIcon,
+                "chatColor" to config.chatColor,
+                "chatBubbleSizePercent" to config.chatBubbleSizePercent.toLong(),
+                "maxRadiusSearch" to config.maxRadiusSearch.toLong(),
+                "voiceSearchEnabled" to config.voiceSearchEnabled,
+                "loyaltyPointsEnabled" to config.loyaltyPointsEnabled,
+                "maintenanceMode" to config.maintenanceMode,
+                "maintenanceMessage" to config.maintenanceMessage,
+                "twoFactorAuthEnabled" to config.twoFactorAuthEnabled,
+                "monthlySubscriptionEnabled" to config.monthlySubscriptionEnabled,
+                "topBarLayout" to config.topBarLayout
+            )
+            firestore.collection("settings").document("admin_config").set(map)
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
+    }
+
+    @Synchronized
+    fun insertAdminConfig(config: AdminConfig) {
+        insertAdminConfigLocalOnly(config)
+        insertAdminConfigFirestore(config)
+    }
+
     @Synchronized
     fun insertChatMessage(sender: String, message: String, senderName: String = "", receiverId: Int = 0) {
         val db = writableDatabase ?: return
@@ -582,6 +765,35 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
         }
         db.insert("chat_messages", null, cv)
         refreshData()
+
+        try {
+            val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val mId = java.util.UUID.randomUUID().toString()
+            val timestamp = System.currentTimeMillis()
+            val docData = mapOf(
+                "id" to Math.abs(mId.hashCode()).toLong(),
+                "sender" to sender,
+                "senderName" to senderName,
+                "receiverId" to receiverId.toLong(),
+                "message" to message,
+                "timestamp" to timestamp
+            )
+            firestore.collection("messages").document(mId).set(docData)
+
+            // Track active chat room for the Admin dashboard
+            val chatId = "chat_user_${receiverId}"
+            val chatData = mapOf(
+                "id" to chatId,
+                "participants" to listOf("الزائر", if (senderName.isNotEmpty()) senderName else "الحرفي $receiverId"),
+                "lastMessage" to message,
+                "timestamp" to timestamp,
+                "isHelpRequested" to false,
+                "isBlocked" to false
+            )
+            firestore.collection("chats").document(chatId).set(chatData)
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
     }
 
     @Synchronized

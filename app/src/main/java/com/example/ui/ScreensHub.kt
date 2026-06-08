@@ -532,6 +532,22 @@ fun PeerChatScreen(viewModel: AppViewModel, config: AdminConfig, provider: Provi
     val chatMessages by viewModel.chatMessages.collectAsStateWithLifecycle()
 
     var messageInput by remember { mutableStateOf("") }
+    var isChatBlockedByAdmin by remember { mutableStateOf(false) }
+
+    // Listen to live frozen state of this chat room
+    LaunchedEffect(provider.id) {
+        try {
+            val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            firestore.collection("chats").document("chat_user_${provider.id}")
+                .addSnapshotListener { snapshot, error ->
+                    if (snapshot != null) {
+                        isChatBlockedByAdmin = snapshot.getBoolean("isBlocked") ?: false
+                    }
+                }
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
+    }
 
     // Filter messages to show conversation with this provider
     val filteredMessages = remember(chatMessages, provider) {
@@ -632,46 +648,64 @@ fun PeerChatScreen(viewModel: AppViewModel, config: AdminConfig, provider: Provi
             }
 
             // Input Send Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White)
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedTextField(
-                    value = messageInput,
-                    onValueChange = { messageInput = it },
-                    placeholder = { Text("أرسل رسالة فورية إلى الفني...") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
-                )
-                IconButton(
-                    onClick = {
-                        val text = messageInput.trim()
-                        if (text.isNotEmpty()) {
-                            scope.launch {
-                                // Add user message
-                                viewModel.saveAdminConfig(config) // touch configs
-                                // Insert Chat Message under simulated peers
-                                dbHelperInsert(viewModel, "user", text, provider.id)
-                                messageInput = ""
-                                
-                                // Simulate Peer replies in 1.5 seconds
-                                delay(1200)
-                                val replies = listOf(
-                                    "أبشر من عيوني يا غالي! أنا جاهز ومستعد للعمل، تواصل معي هاتفياً لتحديد الوقت بالضبط 🤝.",
-                                    "سابر يا سيدي، متى تحب أكون عندك؟ أرجو إرسال عنوانك وتفاصيل العطل 🛠️.",
-                                    "حياك الله يا طيب، متوفر حالياً وبكافة معداتي، التفاصيل سبرت وسهلة بإذن الله."
-                                )
-                                dbHelperInsert(viewModel, "peer", replies.random(), provider.id)
-                            }
-                        }
-                    },
-                    modifier = Modifier.background(theme.primary, CircleShape)
+            if (isChatBlockedByAdmin) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFFEE2E2))
+                        .padding(14.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Send, "Send", tint = Color.White)
+                    Text(
+                        text = "⚠️ هذه المحادثة مجمّدة ومقيدة مؤقتاً بقرار من الرقابة الإدارية ❄️",
+                        color = Color(0xFF991B1B),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White)
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = messageInput,
+                        onValueChange = { messageInput = it },
+                        placeholder = { Text("أرسل رسالة فورية إلى الفني...") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    IconButton(
+                        onClick = {
+                            val text = messageInput.trim()
+                            if (text.isNotEmpty()) {
+                                scope.launch {
+                                    // Add user message
+                                    viewModel.saveAdminConfig(config) // touch configs
+                                    // Insert Chat Message under simulated peers
+                                    dbHelperInsert(viewModel, "user", text, provider.id)
+                                    messageInput = ""
+                                    
+                                    // Simulate Peer replies in 1.5 seconds
+                                    delay(1200)
+                                    val replies = listOf(
+                                        "أبشر من عيوني يا غالي! أنا جاهز ومستعد للعمل، تواصل معي هاتفياً لتحديد الوقت بالضبط 🤝.",
+                                        "سابر يا سيدي، متى تحب أكون عندك؟ أرجو إرسال عنوانك وتفاصيل العطل 🛠️.",
+                                        "حياك الله يا طيب، متوفر حالياً وبكافة معداتي، التفاصيل سبرت وسهلة بإذن الله."
+                                    )
+                                    dbHelperInsert(viewModel, "peer", replies.random(), provider.id)
+                                }
+                            }
+                        },
+                        modifier = Modifier.background(theme.primary, CircleShape)
+                    ) {
+                        Icon(Icons.Default.Send, "Send", tint = Color.White)
+                    }
                 }
             }
         }
