@@ -7,6 +7,10 @@ import android.database.sqlite.SQLiteOpenHelper
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 
 class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_direct_db", null, 2) {
 
@@ -26,7 +30,37 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
     private val _chatMessagesFlow = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatMessagesFlow: Flow<List<ChatMessage>> = _chatMessagesFlow.asStateFlow()
 
+    // Local Bookmarks mapping
+    private val _bookmarkedIds = MutableStateFlow<Set<Int>>(emptySet())
+    private var cachedRemoteProviders: List<Provider> = emptyList()
+    private var providersListener: ListenerRegistration? = null
+
     init {
+        // Initialize Firebase manually
+        try {
+            val options = FirebaseOptions.Builder()
+                .setApplicationId("1:363038603529:android:1f845fcf442c2e6693fbd8")
+                .setProjectId("yemendate")
+                .setApiKey("AIzaSyDOE3ta2r2j9lISFiCi5-9NfAZ4xi-RnZA")
+                .setStorageBucket("yemendate.firebasestorage.app")
+                .build()
+            FirebaseApp.initializeApp(context, options)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Initialize Bookmarks Table and load them
+        try {
+            val db = writableDatabase
+            db?.execSQL("CREATE TABLE IF NOT EXISTS provider_bookmarks (provider_id INTEGER PRIMARY KEY)")
+            loadLocalBookmarks()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Setup real-time Firestore listener
+        setupFirestoreSnapshotListener()
+
         // Trigger initial data load to populate streams
         refreshData()
     }
@@ -141,49 +175,10 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
         onCreate(db)
     }
 
-    // Refresh memory cache in streams
+    // Refresh memory cache in streams (only config and chat, providers are real-time through Firestore)
     @Synchronized
     fun refreshData() {
         val db = readableDatabase ?: return
-
-        // Load Approved
-        val approved = mutableListOf<Provider>()
-        val pCursor = db.rawQuery("SELECT * FROM providers ORDER BY isPinned DESC, rating DESC, name ASC", null)
-        if (pCursor.moveToFirst()) {
-            do {
-                val prov = Provider(
-                    id = pCursor.getInt(pCursor.getColumnIndexOrThrow("id")),
-                    name = pCursor.getString(pCursor.getColumnIndexOrThrow("name")),
-                    mainCategory = pCursor.getString(pCursor.getColumnIndexOrThrow("mainCategory")),
-                    subCategory = pCursor.getString(pCursor.getColumnIndexOrThrow("subCategory")),
-                    city = pCursor.getString(pCursor.getColumnIndexOrThrow("city")),
-                    phone = pCursor.getString(pCursor.getColumnIndexOrThrow("phone")),
-                    whatsapp = pCursor.getString(pCursor.getColumnIndexOrThrow("whatsapp")) ?: "",
-                    description = pCursor.getString(pCursor.getColumnIndexOrThrow("description")) ?: "",
-                    rating = pCursor.getFloat(pCursor.getColumnIndexOrThrow("rating")),
-                    votes = pCursor.getInt(pCursor.getColumnIndexOrThrow("votes")),
-                    isVerified = pCursor.getInt(pCursor.getColumnIndexOrThrow("isVerified")) == 1,
-                    photoUri = pCursor.getString(pCursor.getColumnIndexOrThrow("photoUri")),
-                    idPhotoUri = pCursor.getString(pCursor.getColumnIndexOrThrow("idPhotoUri")),
-                    gender = pCursor.getString(pCursor.getColumnIndexOrThrow("gender")) ?: "ذكر",
-                    registerDate = pCursor.getLong(pCursor.getColumnIndexOrThrow("registerDate")),
-                    isBookmarked = pCursor.getInt(pCursor.getColumnIndexOrThrow("isBookmarked")) == 1,
-                    isPending = pCursor.getInt(pCursor.getColumnIndexOrThrow("isPending")) == 1,
-                    isPinned = pCursor.getInt(pCursor.getColumnIndexOrThrow("isPinned")) == 1,
-                    isRecommended = pCursor.getInt(pCursor.getColumnIndexOrThrow("isRecommended")) == 1,
-                    isSubscribed = pCursor.getInt(pCursor.getColumnIndexOrThrow("isSubscribed")) == 1,
-                    points = pCursor.getInt(pCursor.getColumnIndexOrThrow("points")),
-                    latitude = pCursor.getDouble(pCursor.getColumnIndexOrThrow("latitude")),
-                    longitude = pCursor.getDouble(pCursor.getColumnIndexOrThrow("longitude"))
-                )
-                approved.add(prov)
-            } while (pCursor.moveToNext())
-        }
-        pCursor.close()
-
-        _approvedProvidersFlow.value = approved.filter { !it.isPending }
-        _pendingProvidersFlow.value = approved.filter { it.isPending }
-        _bookmarkedProvidersFlow.value = approved.filter { it.isBookmarked && !it.isPending }
 
         // Load Config
         var config: AdminConfig? = null
@@ -251,46 +246,284 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
         _chatMessagesFlow.value = messages
     }
 
-    // --- Mutations ---
-    @Synchronized
-    fun insertProvider(p: Provider) {
-        val db = writableDatabase ?: return
-        val cv = ContentValues().apply {
-            if (p.id != 0) {
-                put("id", p.id)
+    // --- Firestore Sync Helper Methods ---
+
+    private fun loadLocalBookmarks() {
+        val db = readableDatabase ?: return
+        val set = mutableSetOf<Int>()
+        try {
+            val cursor = db.rawQuery("SELECT provider_id FROM provider_bookmarks", null)
+            if (cursor.moveToFirst()) {
+                do {
+                    set.add(cursor.getInt(0))
+                } while (cursor.moveToNext())
             }
-            put("name", p.name)
-            put("mainCategory", p.mainCategory)
-            put("subCategory", p.subCategory)
-            put("city", p.city)
-            put("phone", p.phone)
-            put("whatsapp", p.whatsapp)
-            put("description", p.description)
-            put("rating", p.rating)
-            put("votes", p.votes)
-            put("isVerified", if (p.isVerified) 1 else 0)
-            put("photoUri", p.photoUri)
-            put("idPhotoUri", p.idPhotoUri)
-            put("gender", p.gender)
-            put("registerDate", p.registerDate)
-            put("isBookmarked", if (p.isBookmarked) 1 else 0)
-            put("isPending", if (p.isPending) 1 else 0)
-            put("isPinned", if (p.isPinned) 1 else 0)
-            put("isRecommended", if (p.isRecommended) 1 else 0)
-            put("isSubscribed", if (p.isSubscribed) 1 else 0)
-            put("points", p.points)
-            put("latitude", p.latitude)
-            put("longitude", p.longitude)
+            cursor.close()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-        db.insertWithOnConflict("providers", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
-        refreshData()
+        _bookmarkedIds.value = set
     }
 
-    @Synchronized
-    fun deleteProvider(p: Provider) {
+    fun toggleLocalBookmark(p: Provider) {
         val db = writableDatabase ?: return
-        db.delete("providers", "id = ?", arrayOf(p.id.toString()))
-        refreshData()
+        val current = _bookmarkedIds.value
+        try {
+            if (current.contains(p.id)) {
+                db.delete("provider_bookmarks", "provider_id = ?", arrayOf(p.id.toString()))
+                _bookmarkedIds.value = current - p.id
+            } else {
+                val cv = ContentValues().apply { put("provider_id", p.id) }
+                db.insert("provider_bookmarks", null, cv)
+                _bookmarkedIds.value = current + p.id
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        updateProviderFlows(cachedRemoteProviders)
+    }
+
+    private fun setupFirestoreSnapshotListener() {
+        try {
+            val firestore = FirebaseFirestore.getInstance()
+            providersListener = firestore.collection("providers")
+                .addSnapshotListener { snapshots, e ->
+                    if (snapshotErrorGate(e)) return@addSnapshotListener
+                    if (snapshots != null) {
+                        val providersList = mutableListOf<Provider>()
+                        for (doc in snapshots.documents) {
+                            try {
+                                val p = documentToProvider(doc)
+                                providersList.add(p)
+                            } catch (ex: Exception) {
+                                ex.printStackTrace()
+                            }
+                        }
+                        cachedRemoteProviders = providersList
+                        updateProviderFlows(providersList)
+                    }
+                }
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
+    }
+
+    private fun snapshotErrorGate(e: Exception?): Boolean {
+        return e != null
+    }
+
+    private fun updateProviderFlows(remoteProviders: List<Provider>) {
+        val bookmarkedSet = _bookmarkedIds.value
+        val updatedList = remoteProviders.map { p ->
+            p.copy(isBookmarked = bookmarkedSet.contains(p.id))
+        }
+
+        // Sort them neatly: Pinned first, then sorted by rating descending, then by name alphabetically.
+        val sortedList = updatedList.sortedWith(
+            compareByDescending<Provider> { it.isPinned }
+                .thenByDescending { it.rating }
+                .thenBy { it.name }
+        )
+
+        _approvedProvidersFlow.value = sortedList.filter { !it.isPending }
+        _pendingProvidersFlow.value = sortedList.filter { it.isPending }
+        _bookmarkedProvidersFlow.value = sortedList.filter { it.isBookmarked && !it.isPending }
+    }
+
+    fun prepopulateFirestoreIfEmpty() {
+        try {
+            val firestore = FirebaseFirestore.getInstance()
+            firestore.collection("providers").limit(1).get()
+                .addOnSuccessListener { querySnapshot ->
+                    if (querySnapshot.isEmpty) {
+                        val initialTechnicians = listOf(
+                            Provider(
+                                name = "م. ياسر الحميري",
+                                mainCategory = "كهرباء وإلكترونيات",
+                                subCategory = "تصليح أجهزة وشبكات منزلية",
+                                city = "صنعاء",
+                                phone = "775432109",
+                                whatsapp = "775432109",
+                                description = "خبرة 10 سنوات في صيانة وتوصيل أنظمة الطاقة الشمسية الذكية، تمديد خطوط وإصلاح لوحات التوزيع المنزلية.",
+                                rating = 4.9f,
+                                votes = 42,
+                                isVerified = true,
+                                photoUri = "https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=400",
+                                isPending = false
+                            ),
+                            Provider(
+                                name = "الأسطى ناصر العدني",
+                                mainCategory = "سباكة وصحي",
+                                subCategory = "تأسيس وصيانة شبكات مياه",
+                                city = "عدن",
+                                phone = "733987654",
+                                whatsapp = "733987654",
+                                description = "متخصص في كشف تسربات المياه وتأسيس شبكات الصرف الصحي للمنازل بمواد أصلية وضمانة للعمل المتين.",
+                                rating = 4.8f,
+                                votes = 28,
+                                isVerified = true,
+                                photoUri = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400",
+                                isPending = false
+                            ),
+                            Provider(
+                                name = "فارس الشرعبي",
+                                mainCategory = "نجارة وديكور",
+                                subCategory = "صيانة وتفصيل غرف وأبواب",
+                                city = "تعز",
+                                phone = "711554433",
+                                whatsapp = "711554433",
+                                description = "تفصيل وصيانة الأثاث الخشبي، أبواب غرف بجودة عالية، معالجة تلف الأخشاب والترميم الفوري السريع.",
+                                rating = 4.7f,
+                                votes = 19,
+                                isVerified = false,
+                                photoUri = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400",
+                                isPending = false
+                            ),
+                            Provider(
+                                name = "صالح باوزير",
+                                mainCategory = "تكييف وتبريد",
+                                subCategory = "صيانة مكيفات اسبليت وشباك",
+                                city = "حضرموت",
+                                phone = "774900112",
+                                whatsapp = "774900112",
+                                description = "شحن فريون، فك وتركيب مكيفات، معالجة ضعف التبريد وتوفير استهلاك الكهرباء لجميع أنواع المكيفات.",
+                                rating = 4.9f,
+                                votes = 31,
+                                isVerified = true,
+                                photoUri = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
+                                isPending = false
+                            ),
+                            Provider(
+                                name = "الحداد عبده عياش",
+                                mainCategory = "حدادة وألومنيوم",
+                                subCategory = "حماية نوافذ ومظلات وسواتر",
+                                city = "الحديدة",
+                                phone = "735882211",
+                                whatsapp = "",
+                                description = "تفصيل بوابات حديدية قوية ونوافذ ألومنيوم وشبك حماية مقاوم للرطوبة والصدأ بأسعار مناسبة.",
+                                rating = 4.6f,
+                                votes = 15,
+                                isVerified = false,
+                                photoUri = null,
+                                isPending = false
+                            ),
+                            Provider(
+                                name = "أروى الصنعاني",
+                                mainCategory = "خياطة وتفصيل",
+                                subCategory = "تفصيل جلابيات وفساتين تراثية",
+                                city = "صنعاء",
+                                phone = "777123456",
+                                whatsapp = "777123456",
+                                description = "خياطة الملابس النسائية التراثية والفساتين الراقية، دقة عالية وموديلات حديثة لتلبي كل تطلعاتكم.",
+                                gender = "أنثى",
+                                rating = 4.9f,
+                                votes = 55,
+                                isVerified = true,
+                                photoUri = "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400",
+                                isPending = false
+                            )
+                        )
+
+                        val batch = firestore.batch()
+                        for (tech in initialTechnicians) {
+                            val phoneFiltered = tech.phone.filter { it.isDigit() }
+                            val techId = Math.abs(phoneFiltered.hashCode())
+                            val docId = "provider_${phoneFiltered}"
+                            val docRef = firestore.collection("providers").document(docId)
+                            val data = providerToMap(tech.copy(id = techId))
+                            batch.set(docRef, data)
+                        }
+                        batch.commit()
+                    }
+                }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun documentToProvider(doc: com.google.firebase.firestore.DocumentSnapshot): Provider {
+        val phone = doc.getString("phone") ?: ""
+        val id = (doc.getLong("id") ?: Math.abs(phone.filter { it.isDigit() }.hashCode()).toLong()).toInt()
+        return Provider(
+            id = id,
+            name = doc.getString("name") ?: "",
+            mainCategory = doc.getString("mainCategory") ?: "",
+            subCategory = doc.getString("subCategory") ?: "",
+            city = doc.getString("city") ?: "",
+            phone = phone,
+            whatsapp = doc.getString("whatsapp") ?: "",
+            description = doc.getString("description") ?: "",
+            rating = (doc.getDouble("rating") ?: doc.getLong("rating")?.toDouble() ?: 4.5).toFloat(),
+            votes = (doc.getLong("votes") ?: 0).toInt(),
+            isVerified = doc.getBoolean("isVerified") ?: false,
+            photoUri = doc.getString("photoUri"),
+            idPhotoUri = doc.getString("idPhotoUri"),
+            gender = doc.getString("gender") ?: "ذكر",
+            registerDate = doc.getLong("registerDate") ?: System.currentTimeMillis(),
+            isBookmarked = false,
+            isPending = doc.getBoolean("isPending") ?: false,
+            isPinned = doc.getBoolean("isPinned") ?: false,
+            isRecommended = doc.getBoolean("isRecommended") ?: false,
+            isSubscribed = doc.getBoolean("isSubscribed") ?: false,
+            points = (doc.getLong("points") ?: 0).toInt(),
+            latitude = doc.getDouble("latitude") ?: 0.0,
+            longitude = doc.getDouble("longitude") ?: 0.0
+        )
+    }
+
+    private fun providerToMap(p: Provider): Map<String, Any?> {
+        return mapOf(
+            "id" to p.id,
+            "name" to p.name,
+            "mainCategory" to p.mainCategory,
+            "subCategory" to p.subCategory,
+            "city" to p.city,
+            "phone" to p.phone,
+            "whatsapp" to p.whatsapp,
+            "description" to p.description,
+            "rating" to p.rating.toDouble(),
+            "votes" to p.votes,
+            "isVerified" to p.isVerified,
+            "photoUri" to p.photoUri,
+            "idPhotoUri" to p.idPhotoUri,
+            "gender" to p.gender,
+            "registerDate" to p.registerDate,
+            "isPending" to p.isPending,
+            "isPinned" to p.isPinned,
+            "isRecommended" to p.isRecommended,
+            "isSubscribed" to p.isSubscribed,
+            "points" to p.points,
+            "latitude" to p.latitude,
+            "longitude" to p.longitude
+        )
+    }
+
+    // --- Mutations ---
+
+    fun insertProvider(p: Provider) {
+        try {
+            val phoneFiltered = p.phone.filter { it.isDigit() }
+            val finalId = if (p.id != 0) p.id else Math.abs(phoneFiltered.hashCode())
+            val updatedProvider = p.copy(id = finalId)
+
+            val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val docId = "provider_${phoneFiltered.ifEmpty { finalId.toString() }}"
+            firestore.collection("providers").document(docId)
+                .set(providerToMap(updatedProvider))
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
+    }
+
+    fun deleteProvider(p: Provider) {
+        try {
+            val phoneFiltered = p.phone.filter { it.isDigit() }
+            val docId = "provider_${phoneFiltered.ifEmpty { p.id.toString() }}"
+            val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            firestore.collection("providers").document(docId).delete()
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
     }
 
     @Synchronized

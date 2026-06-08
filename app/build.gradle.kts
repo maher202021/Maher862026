@@ -20,7 +20,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.yemenservices"
+        applicationId = "com.yemendate"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
@@ -92,6 +92,10 @@ dependencies {
 
     // Image loading
     implementation(libs.coil.compose)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.firestore)
 
     // Testing (optional/standard unit tests)
     testImplementation(libs.junit)
