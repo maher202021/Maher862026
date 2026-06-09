@@ -38,7 +38,7 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
     private var chatsListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     init {
-        // Initialize Firebase manually
+        // Initialize Firebase manually with safety check and force reconstruction
         try {
             val options = FirebaseOptions.Builder()
                 .setApplicationId("1:363038603529:android:1f845fcf442c2e6693fbd8")
@@ -46,7 +46,23 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                 .setApiKey("AIzaSyDOE3ta2r2j9lISFiCi5-9NfAZ4xi-RnZA")
                 .setStorageBucket("yemendate.firebasestorage.app")
                 .build()
-            FirebaseApp.initializeApp(context, options)
+
+            var needInit = true
+            try {
+                val currentApp = FirebaseApp.getInstance()
+                if (currentApp.options.projectId != "yemendate") {
+                    currentApp.delete()
+                    needInit = true
+                } else {
+                    needInit = false
+                }
+            } catch (ex: Exception) {
+                needInit = true
+            }
+
+            if (needInit) {
+                FirebaseApp.initializeApp(context, options)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -71,34 +87,6 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
     }
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("""
-            CREATE TABLE providers (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                mainCategory TEXT NOT NULL,
-                subCategory TEXT NOT NULL,
-                city TEXT NOT NULL,
-                phone TEXT NOT NULL,
-                whatsapp TEXT,
-                description TEXT,
-                rating REAL,
-                votes INTEGER,
-                isVerified INTEGER,
-                photoUri TEXT,
-                idPhotoUri TEXT,
-                gender TEXT,
-                registerDate INTEGER,
-                isBookmarked INTEGER,
-                isPending INTEGER,
-                isPinned INTEGER,
-                isRecommended INTEGER,
-                isSubscribed INTEGER,
-                points INTEGER,
-                latitude REAL,
-                longitude REAL
-            )
-        """.trimIndent())
-
         db.execSQL("""
             CREATE TABLE admin_config (
                 id INTEGER PRIMARY KEY,
@@ -175,7 +163,6 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS providers")
         db.execSQL("DROP TABLE IF EXISTS admin_config")
         db.execSQL("DROP TABLE IF EXISTS chat_messages")
         onCreate(db)
@@ -808,103 +795,159 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
         refreshData()
     }
 
-    // Backup & Restore Utilities
+    // Backup & Restore Utilities (Firestore Direct Coordination)
     @Synchronized
     fun exportBackupJson(): String {
-        val db = readableDatabase ?: return ""
+        val providers = cachedRemoteProviders
         val sb = StringBuilder()
         sb.append("{\n  \"providers\": [\n")
-        val pCursor = db.rawQuery("SELECT * FROM providers", null)
         var first = true
-        if (pCursor.moveToFirst()) {
-            do {
-                if (!first) sb.append(",\n")
-                first = false
-                val id = pCursor.getInt(pCursor.getColumnIndexOrThrow("id"))
-                val name = pCursor.getString(pCursor.getColumnIndexOrThrow("name"))
-                val main = pCursor.getString(pCursor.getColumnIndexOrThrow("mainCategory"))
-                val sub = pCursor.getString(pCursor.getColumnIndexOrThrow("subCategory"))
-                val city = pCursor.getString(pCursor.getColumnIndexOrThrow("city"))
-                val phone = pCursor.getString(pCursor.getColumnIndexOrThrow("phone"))
-                val wa = pCursor.getString(pCursor.getColumnIndexOrThrow("whatsapp")) ?: ""
-                val desc = pCursor.getString(pCursor.getColumnIndexOrThrow("description")) ?: ""
-                val rating = pCursor.getFloat(pCursor.getColumnIndexOrThrow("rating"))
-                val isP = pCursor.getInt(pCursor.getColumnIndexOrThrow("isPending"))
-                val isPin = pCursor.getInt(pCursor.getColumnIndexOrThrow("isPinned"))
-                val isRec = pCursor.getInt(pCursor.getColumnIndexOrThrow("isRecommended"))
-                val sbsc = pCursor.getInt(pCursor.getColumnIndexOrThrow("isSubscribed"))
-                val pts = pCursor.getInt(pCursor.getColumnIndexOrThrow("points"))
-                val lat = pCursor.getDouble(pCursor.getColumnIndexOrThrow("latitude"))
-                val lon = pCursor.getDouble(pCursor.getColumnIndexOrThrow("longitude"))
-
-                sb.append("    {")
-                sb.append("\"id\": $id, ")
-                sb.append("\"name\": \"$name\", ")
-                sb.append("\"mainCategory\": \"$main\", ")
-                sb.append("\"subCategory\": \"$sub\", ")
-                sb.append("\"city\": \"$city\", ")
-                sb.append("\"phone\": \"$phone\", ")
-                sb.append("\"whatsapp\": \"$wa\", ")
-                sb.append("\"description\": \"${desc.replace("\n", "\\n")}\", ")
-                sb.append("\"rating\": $rating, ")
-                sb.append("\"isPending\": $isP, ")
-                sb.append("\"isPinned\": $isPin, ")
-                sb.append("\"isRecommended\": $isRec, ")
-                sb.append("\"isSubscribed\": $sbsc, ")
-                sb.append("\"points\": $pts, ")
-                sb.append("\"latitude\": $lat, ")
-                sb.append("\"longitude\": $lon")
-                sb.append("}")
-            } while (pCursor.moveToNext())
+        for (p in providers) {
+            if (!first) sb.append(",\n")
+            first = false
+            sb.append("    {")
+            sb.append("\"id\": ${p.id}, ")
+            sb.append("\"name\": \"${p.name}\", ")
+            sb.append("\"mainCategory\": \"${p.mainCategory}\", ")
+            sb.append("\"subCategory\": \"${p.subCategory}\", ")
+            sb.append("\"city\": \"${p.city}\", ")
+            sb.append("\"phone\": \"${p.phone}\", ")
+            sb.append("\"whatsapp\": \"${p.whatsapp}\", ")
+            sb.append("\"description\": \"${p.description.replace("\n", "\\n")}\", ")
+            sb.append("\"rating\": ${p.rating}, ")
+            sb.append("\"isPending\": ${if (p.isPending) 1 else 0}, ")
+            sb.append("\"isPinned\": ${if (p.isPinned) 1 else 0}, ")
+            sb.append("\"isRecommended\": ${if (p.isRecommended) 1 else 0}, ")
+            sb.append("\"isSubscribed\": ${if (p.isSubscribed) 1 else 0}, ")
+            sb.append("\"points\": ${p.points}, ")
+            sb.append("\"latitude\": ${p.latitude}, ")
+            sb.append("\"longitude\": ${p.longitude}")
+            sb.append("}")
         }
-        pCursor.close()
         sb.append("\n  ]\n}")
         return sb.toString()
     }
 
     @Synchronized
     fun importBackupJson(json: String): Boolean {
-        // Simple robust custom parser for safe import directly into SQLite table
-        val db = writableDatabase ?: return false
         return try {
-            db.beginTransaction()
-            db.delete("providers", null, null)
+            val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val batch = firestore.batch()
 
-            // Extremely reliable token parser for simple flat lists
+            // 1. Delete all existing providers from Firestore first (mirroring wipe database)
+            for (p in cachedRemoteProviders) {
+                val phoneFiltered = p.phone.filter { it.isDigit() }
+                val docId = "provider_${phoneFiltered.ifEmpty { p.id.toString() }}"
+                val docRef = firestore.collection("providers").document(docId)
+                batch.delete(docRef)
+            }
+
+            // 2. Parse the imported JSON and add to the Firestore Batch
             val providersRegex = Regex("\\{([^}]+)\\}")
             val matches = providersRegex.findAll(json)
 
             for (m in matches) {
                 val groupVal = m.groupValues[1]
-                val keysRegex = Regex("\"(\\w+)\"\\s*:\\s*(?:\"([^\"]*)\"|([\\d.]+))")
+                val keysRegex = Regex("\"(\\w+)\"\\s*:\\s*(?:\"([^\"]*)\"|([\\d.-]+))")
                 val contents = keysRegex.findAll(groupVal)
 
-                val cv = ContentValues()
+                var providerId = 0
+                var name = ""
+                var mainCategory = ""
+                var subCategory = ""
+                var city = ""
+                var phone = ""
+                var whatsapp = ""
+                var description = ""
+                var rating = 4.5f
+                var votes = 0
+                var isVerified = false
+                var photoUri: String? = null
+                var idPhotoUri: String? = null
+                var gender = "ذكر"
+                var registerDate = System.currentTimeMillis()
+                var isPending = false
+                var isPinned = false
+                var isRecommended = false
+                var isSubscribed = false
+                var points = 0
+                var latitude = 0.0
+                var longitude = 0.0
+
                 for (con in contents) {
                     val key = con.groupValues[1]
                     val strValue = con.groupValues[2]
                     val numValue = con.groupValues[3]
 
-                    if (key == "id") continue // reset to autogenerate to avoid overlap
-
-                    if (strValue.isNotEmpty()) {
-                        cv.put(key, strValue.replace("\\n", "\n"))
-                    } else if (numValue.isNotEmpty()) {
-                        if (numValue.contains(".")) {
-                            cv.put(key, numValue.toDouble())
-                        } else {
-                            cv.put(key, numValue.toInt())
-                        }
+                    if (key == "id" && numValue.isNotEmpty()) {
+                        providerId = numValue.toInt()
+                    } else if (key == "name" && strValue.isNotEmpty()) {
+                        name = strValue
+                    } else if (key == "mainCategory" && strValue.isNotEmpty()) {
+                        mainCategory = strValue
+                    } else if (key == "subCategory" && strValue.isNotEmpty()) {
+                        subCategory = strValue
+                    } else if (key == "city" && strValue.isNotEmpty()) {
+                        city = strValue
+                    } else if (key == "phone") {
+                        phone = if (strValue.isNotEmpty()) strValue else numValue
+                    } else if (key == "whatsapp") {
+                        whatsapp = if (strValue.isNotEmpty()) strValue else numValue
+                    } else if (key == "description" && strValue.isNotEmpty()) {
+                        description = strValue.replace("\\n", "\n")
+                    } else if (key == "rating" && numValue.isNotEmpty()) {
+                        rating = numValue.toFloat()
+                    } else if (key == "votes" && numValue.isNotEmpty()) {
+                        votes = numValue.toInt()
+                    } else if (key == "isVerified") {
+                        isVerified = if (numValue.isNotEmpty()) numValue.toInt() == 1 else false
+                    } else if (key == "photoUri" && strValue.isNotEmpty()) {
+                        photoUri = strValue
+                    } else if (key == "idPhotoUri" && strValue.isNotEmpty()) {
+                        idPhotoUri = strValue
+                    } else if (key == "gender" && strValue.isNotEmpty()) {
+                        gender = strValue
+                    } else if (key == "registerDate" && numValue.isNotEmpty()) {
+                        registerDate = numValue.toLong()
+                    } else if (key == "isPending" && numValue.isNotEmpty()) {
+                        isPending = numValue.toInt() == 1
+                    } else if (key == "isPinned" && numValue.isNotEmpty()) {
+                        isPinned = numValue.toInt() == 1
+                    } else if (key == "isRecommended" && numValue.isNotEmpty()) {
+                        isRecommended = numValue.toInt() == 1
+                    } else if (key == "isSubscribed" && numValue.isNotEmpty()) {
+                        isSubscribed = numValue.toInt() == 1
+                    } else if (key == "points" && numValue.isNotEmpty()) {
+                        points = numValue.toInt()
+                    } else if (key == "latitude" && numValue.isNotEmpty()) {
+                        latitude = numValue.toDouble()
+                    } else if (key == "longitude" && numValue.isNotEmpty()) {
+                        longitude = numValue.toDouble()
                     }
                 }
-                db.insert("providers", null, cv)
+
+                val phoneFiltered = phone.filter { it.isDigit() }
+                val finalId = if (providerId != 0) providerId else Math.abs(phoneFiltered.hashCode())
+                val p = Provider(
+                    id = finalId, name = name, mainCategory = mainCategory, subCategory = subCategory,
+                    city = city, phone = phone, whatsapp = whatsapp, description = description,
+                    rating = rating, votes = votes, isVerified = isVerified, photoUri = photoUri,
+                    idPhotoUri = idPhotoUri, gender = gender, registerDate = registerDate,
+                    isBookmarked = false, isPending = isPending, isPinned = isPinned,
+                    isRecommended = isRecommended, isSubscribed = isSubscribed, points = points,
+                    latitude = latitude, longitude = longitude
+                )
+
+                val docId = "provider_${phoneFiltered.ifEmpty { finalId.toString() }}"
+                val docRef = firestore.collection("providers").document(docId)
+                batch.set(docRef, providerToMap(p))
             }
-            db.setTransactionSuccessful()
-            db.endTransaction()
-            refreshData()
+
+            // Execute the Firestore write batch
+            batch.commit()
             true
         } catch (e: Exception) {
-            if (db.inTransaction()) db.endTransaction()
+            e.printStackTrace()
             false
         }
     }
