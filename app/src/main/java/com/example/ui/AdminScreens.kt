@@ -2069,6 +2069,39 @@ private fun ShuttleBackupTabDrawer(viewModel: AppViewModel, config: AdminConfig,
     val clipboardManager = LocalClipboardManager.current
     var shuttleTextPaste by remember { mutableStateOf("") }
     var autoScheduleInterval by remember { mutableStateOf("يومياً تلقائياً") }
+    var showFirebaseNukeWarnDialog by remember { mutableStateOf(false) }
+
+    if (showFirebaseNukeWarnDialog) {
+        AlertDialog(
+            onDismissRequest = { showFirebaseNukeWarnDialog = false },
+            title = { Text("⚠️ تحذير أمني بالغ الخطورة!", color = Color.Red, fontWeight = FontWeight.Bold, fontSize = 14.sp) },
+            text = {
+                Text("هل أنت متأكد تماماً من حذف وإزالة كافة البيانات المتزامنة مع Firebase نهائياً؟ هذا الإجراء سيقوم بتصفير جميع الفنيين، وغرف الدعم، والرسائل السحابية مباشرة من قواعد Firestore فوراً لدى الجميع ولا يمكن استرجاعها.")
+            },
+            confirmButton = {
+                Button(
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                    onClick = {
+                        viewModel.clearAllFirebaseSyncData { success ->
+                            if (success) {
+                                Toast.makeText(context, "تم حذف جميع بيانات المزامنة مع Firebase وتصفيرها بالكامل بنجاح! 🧼🔥", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "حدث خطأ أثناء محاولة مسح البيانات من Firebase! ❌", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                        showFirebaseNukeWarnDialog = false
+                    }
+                ) {
+                    Text("تأكيد حذف جميع بيانات المزامنة 🚨", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFirebaseNukeWarnDialog = false }) {
+                    Text("تراجع")
+                }
+            }
+        )
+    }
 
     LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
@@ -2153,6 +2186,26 @@ private fun ShuttleBackupTabDrawer(viewModel: AppViewModel, config: AdminConfig,
                                 Text(str, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (autoScheduleInterval == str) Color.White else Color.Black)
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Firebase Cloud Nuke Option
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2))) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("🔥 تصفير وحذف بيانات المزامنة السحابية (Firebase Purge):", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF991B1B))
+                    Text("سيقوم هذا الخيار بحذف ومسح كافة فئات البيانات المتزامنة مع Firebase Firestore (الفنيين، غرف الدعم، والرسائل) نهائياً وتصفيرها لدى جميع المستخدمين فوراً.", fontSize = 10.5.sp, color = Color.DarkGray)
+
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            showFirebaseNukeWarnDialog = true
+                        }
+                    ) {
+                        Text("حذف جميع بيانات المزامنة مع Firebase 🚨", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }

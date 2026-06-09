@@ -304,8 +304,14 @@ fun RegistrationScreen(viewModel: AppViewModel, config: AdminConfig) {
     var idPhotoUriSimulated by remember { mutableStateOf<String?>(null) }
     var showFemaleAvatarSelected by remember { mutableStateOf(false) }
 
-    val citiesList = listOf("صنعاء", "عدن", "تعز", "الحديدة", "حضرموت", "إب", "ذمار", "مأرب")
-    val categoriesList = listOf("كهرباء وإلكترونيات", "سباكة وصحي", "نجارة وديكور", "تكييف وتبريد", "حدادة وألومنيوم", "خياطة وتفصيل", "أخرى")
+    val categoriesListRaw by viewModel.categories.collectAsStateWithLifecycle()
+    val citiesListRaw by viewModel.cities.collectAsStateWithLifecycle()
+
+    val defaultCategories = listOf("كهرباء وإلكترونيات", "سباكة وصحي", "نجارة وديكور", "تكييف وتبريد", "حدادة وألومنيوم", "خياطة وتفصيل", "أخرى")
+    val defaultCities = listOf("صنعاء", "عدن", "تعز", "الحديدة", "حضرموت", "إب", "ذمار", "مأرب")
+
+    val categoriesList = if (categoriesListRaw.isNotEmpty()) categoriesListRaw else defaultCategories
+    val citiesList = if (citiesListRaw.isNotEmpty()) citiesListRaw else defaultCities
 
     Column(
         modifier = Modifier

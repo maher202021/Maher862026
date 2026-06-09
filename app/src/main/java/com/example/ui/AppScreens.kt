@@ -168,8 +168,22 @@ fun DirectoryScreen(viewModel: AppViewModel, config: AdminConfig, onProviderClic
     val activeGender by viewModel.selectedGender.collectAsStateWithLifecycle()
     val providers by viewModel.approvedProviders.collectAsStateWithLifecycle()
 
-    val categoriesList = listOf("الكل", "كهرباء وإلكترونيات", "سباكة وصحي", "نجارة وديكور", "تكييف وتبريد", "حدادة وألومنيوم", "خياطة وتفصيل", "أخرى")
-    val citiesList = listOf("الكل", "صنعاء", "عدن", "تعز", "الحديدة", "حضرموت", "إب", "ذمار")
+    val categoriesListRaw by viewModel.categories.collectAsStateWithLifecycle()
+    val citiesListRaw by viewModel.cities.collectAsStateWithLifecycle()
+
+    val defaultCategories = listOf("الكل", "كهرباء وإلكترونيات", "سباكة وصحي", "نجارة وديكور", "تكييف وتبريد", "حدادة وألومنيوم", "خياطة وتفصيل", "أخرى")
+    val defaultCities = listOf("الكل", "صنعاء", "عدن", "تعز", "الحديدة", "حضرموت", "إب", "ذمار")
+
+    val categoriesList = if (categoriesListRaw.isNotEmpty()) {
+        listOf("الكل") + categoriesListRaw.filter { it != "الكل" }
+    } else {
+        defaultCategories
+    }
+    val citiesList = if (citiesListRaw.isNotEmpty()) {
+        listOf("الكل") + citiesListRaw.filter { it != "الكل" }
+    } else {
+        defaultCities
+    }
     val genderList = listOf("الكل", "ذكر", "أنثى")
 
     // Filter recommended providers for high impact slider

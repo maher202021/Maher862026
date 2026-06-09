@@ -92,6 +92,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val chatMessages: StateFlow<List<ChatMessage>> = repository.chatMessages
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val categories: StateFlow<List<String>> = repository.categories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val cities: StateFlow<List<String>> = repository.cities
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     init {
         // Pre-populate database with default configurations and popular technicians immediately on first load
         viewModelScope.launch(Dispatchers.IO) {
@@ -273,6 +279,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.clearChat()
         }
+    }
+
+    fun clearAllFirebaseSyncData(onComplete: (Boolean) -> Unit) {
+        repository.clearAllFirebaseSyncData(onComplete)
     }
 
     // --- Admin & Backdoor Authentication Managers ---

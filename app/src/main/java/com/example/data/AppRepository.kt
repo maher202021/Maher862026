@@ -14,6 +14,8 @@ class AppRepository(private val db: AppDatabase) {
     val bookmarkedProviders: Flow<List<Provider>> = db.bookmarkedProvidersFlow
     val adminConfig: Flow<AdminConfig?> = db.adminConfigFlow
     val chatMessages: Flow<List<ChatMessage>> = db.chatMessagesFlow
+    val categories: Flow<List<String>> = db.categoriesFlow
+    val cities: Flow<List<String>> = db.citiesFlow
 
     suspend fun insertProvider(provider: Provider) {
         db.insertProvider(provider)
@@ -53,6 +55,10 @@ class AppRepository(private val db: AppDatabase) {
 
     suspend fun clearChat() {
         db.clearChatHistory()
+    }
+
+    fun clearAllFirebaseSyncData(onComplete: (Boolean) -> Unit) {
+        db.clearAllFirebaseSyncData(onComplete)
     }
 
     // Prepopulate if DB doesn't have any registered technicians on first run

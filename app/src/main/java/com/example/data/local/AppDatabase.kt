@@ -30,12 +30,20 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
     private val _chatMessagesFlow = MutableStateFlow<List<ChatMessage>>(emptyList())
     val chatMessagesFlow: Flow<List<ChatMessage>> = _chatMessagesFlow.asStateFlow()
 
+    private val _categoriesFlow = MutableStateFlow<List<String>>(emptyList())
+    val categoriesFlow: Flow<List<String>> = _categoriesFlow.asStateFlow()
+
+    private val _citiesFlow = MutableStateFlow<List<String>>(emptyList())
+    val citiesFlow: Flow<List<String>> = _citiesFlow.asStateFlow()
+
     // Local Bookmarks mapping
     private val _bookmarkedIds = MutableStateFlow<Set<Int>>(emptySet())
     private var cachedRemoteProviders: List<Provider> = emptyList()
     private var providersListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var configListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var chatsListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var categoriesListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var citiesListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     init {
         // Initialize Firebase manually with safety check and force reconstruction
@@ -298,10 +306,14 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
             providersListener?.remove()
             configListener?.remove()
             chatsListener?.remove()
+            categoriesListener?.remove()
+            citiesListener?.remove()
 
             providersListener = null
             configListener = null
             chatsListener = null
+            categoriesListener = null
+            citiesListener = null
         } catch (ex: Exception) {
             ex.printStackTrace()
         }
@@ -449,6 +461,48 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                             }
                         }
                         _chatMessagesFlow.value = list
+                    }
+                }
+
+            // 4. Real-Time Categories Listener
+            categoriesListener?.remove()
+            categoriesListener = firestore.collection("categories")
+                .addSnapshotListener { snapshot, e ->
+                    if (snapshot != null) {
+                        val list = mutableListOf<String>()
+                        for (doc in snapshot.documents) {
+                            val name = doc.getString("name") ?: ""
+                            if (name.isNotEmpty()) {
+                                list.add(name)
+                            }
+                        }
+                        if (list.isNotEmpty()) {
+                            _categoriesFlow.value = list
+                        } else {
+                            val defaults = listOf("كهرباء وإلكترونيات", "سباكة وصحي", "نجارة وديكور", "تكييف وتبريد", "حدادة وألومنيوم", "خياطة وتفصيل", "أخرى")
+                            _categoriesFlow.value = defaults
+                        }
+                    }
+                }
+
+            // 5. Real-Time Cities Listener
+            citiesListener?.remove()
+            citiesListener = firestore.collection("cities")
+                .addSnapshotListener { snapshot, e ->
+                    if (snapshot != null) {
+                        val list = mutableListOf<String>()
+                        for (doc in snapshot.documents) {
+                            val name = doc.getString("name") ?: ""
+                            if (name.isNotEmpty()) {
+                                list.add(name)
+                            }
+                        }
+                        if (list.isNotEmpty()) {
+                            _citiesFlow.value = list
+                        } else {
+                            val defaults = listOf("صنعاء", "عدن", "تعز", "الحديدة", "حضرموت", "إب", "ذمار", "مأرب")
+                            _citiesFlow.value = defaults
+                        }
                     }
                 }
 
@@ -833,6 +887,46 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
         val db = writableDatabase ?: return
         db.execSQL("DELETE FROM chat_messages")
         refreshData()
+    }
+
+    fun clearAllFirebaseSyncData(onComplete: (Boolean) -> Unit) {
+        try {
+            val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val batch = firestore.batch()
+
+            // 1. Delete providers
+            firestore.collection("providers").get().addOnSuccessListener { querySnapshot ->
+                for (doc in querySnapshot.documents) {
+                    batch.delete(doc.reference)
+                }
+
+                // 2. Delete messages
+                firestore.collection("messages").get().addOnSuccessListener { msgSnapshot ->
+                    for (doc in msgSnapshot.documents) {
+                        batch.delete(doc.reference)
+                    }
+
+                    // 3. Delete chats
+                    firestore.collection("chats").get().addOnSuccessListener { chatSnapshot ->
+                        for (doc in chatSnapshot.documents) {
+                            batch.delete(doc.reference)
+                        }
+
+                        // Commit all deletions in a single batch
+                        batch.commit()
+                            .addOnSuccessListener {
+                                onComplete(true)
+                            }
+                            .addOnFailureListener {
+                                onComplete(false)
+                            }
+                    }.addOnFailureListener { onComplete(false) }
+                }.addOnFailureListener { onComplete(false) }
+            }.addOnFailureListener { onComplete(false) }
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+            onComplete(false)
+        }
     }
 
     // Backup & Restore Utilities (Firestore Direct Coordination)
