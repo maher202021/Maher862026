@@ -118,16 +118,7 @@ fun TopAppBarRtl(viewModel: AppViewModel, config: AdminConfig) {
                     )
                 }
 
-                // Refresh state Icon 🔄
-                IconButton(onClick = {
-                    Toast.makeText(context, if (currentLanguage == "ar") "جاري مزامنة وتحديث البيانات... 🔄" else "Syncing data in real-time... 🔄", Toast.LENGTH_SHORT).show()
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "تحديث",
-                        tint = Color.White
-                    )
-                }
+
             }
         }
     }
