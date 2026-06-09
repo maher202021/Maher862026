@@ -13,6 +13,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val db = AppDatabase(application.applicationContext)
     private val repository = AppRepository(db)
+    private val prefs = application.getSharedPreferences("yemen_services_direct_prefs", android.content.Context.MODE_PRIVATE)
 
     // --- Filter States ---
     private val _searchQuery = MutableStateFlow("")
@@ -49,6 +50,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isBackdoorRemembered = MutableStateFlow(false)
     val isBackdoorRemembered: StateFlow<Boolean> = _isBackdoorRemembered.asStateFlow()
+
+    init {
+        _isAdminAuthenticated.value = prefs.getBoolean("is_admin_auth", false)
+        _isBackdoorAuthenticated.value = prefs.getBoolean("is_backdoor_auth", false)
+    }
 
     // --- Real-time filtered approved provider listings ---
     val approvedProviders: StateFlow<List<Provider>> = combine(
@@ -274,6 +280,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val configuredPassword = adminConfig.value.adminPassword
         val authenticated = pin == configuredPassword || pin == "maher736462"
         _isAdminAuthenticated.value = authenticated
+        prefs.edit().putBoolean("is_admin_auth", authenticated).apply()
         return authenticated
     }
 
@@ -282,15 +289,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val authenticated = pin == actualSecret || pin == "maher--736462"
         _isBackdoorAuthenticated.value = authenticated
         _isBackdoorRemembered.value = rememberMe
+        if (rememberMe) {
+            prefs.edit().putBoolean("is_backdoor_auth", authenticated).apply()
+        }
         return authenticated
     }
 
     fun logOutAdmin() {
         _isAdminAuthenticated.value = false
+        prefs.edit().putBoolean("is_admin_auth", false).apply()
     }
 
     fun logOutBackdoor() {
         _isBackdoorAuthenticated.value = false
+        prefs.edit().putBoolean("is_backdoor_auth", false).apply()
     }
 
     fun saveAdminConfig(config: AdminConfig) {

@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.local.AdminConfig
@@ -131,6 +132,23 @@ fun InfoScreen(viewModel: AppViewModel, config: AdminConfig) {
             }
         }
 
+        // Optional custom about app illustration/banner
+        if (config.showImageInAbout && config.aboutAppImage.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth().height(160.dp),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                AsyncImage(
+                    model = config.aboutAppImage,
+                    contentDescription = "About App Image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
+
         // Stats Card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -161,81 +179,91 @@ fun InfoScreen(viewModel: AppViewModel, config: AdminConfig) {
         }
 
         // Sponsoring Direct contact support cards
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("📞 قنوات التواصل والدعم الفني", fontWeight = FontWeight.Bold, color = theme.primary, fontSize = 13.sp)
+        if (config.showPhoneInAbout || config.showWhatsappInAbout || config.showEmailInAbout) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("📞 قنوات التواصل والدعم الفني", fontWeight = FontWeight.Bold, color = theme.primary, fontSize = 13.sp)
 
-                // Call
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${config.supportPhone}")))
+                    // Call
+                    if (config.showPhoneInAbout && config.supportPhone.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${config.supportPhone}")))
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Phone, contentDescription = "Phone", tint = theme.primary, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("رقم الإدارة المباشر: ${config.supportPhone}", fontSize = 12.sp)
                         }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Phone, contentDescription = "Phone", tint = theme.primary, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("رقم الإدارة المباشر: ${config.supportPhone}", fontSize = 12.sp)
-                }
+                    }
 
-                // WhatsApp
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val msg = Uri.encode("السلام عليكم يا إدارة، استفسار بخصوص تطبيق خدمات اليمن...")
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=967${config.supportWhatsapp}&text=$msg")))
+                    // WhatsApp
+                    if (config.showWhatsappInAbout && config.supportWhatsapp.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    val msg = Uri.encode("السلام عليكم يا إدارة، استفسار بخصوص تطبيق خدمات اليمن...")
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://api.whatsapp.com/send?phone=967${config.supportWhatsapp}&text=$msg")))
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Chat, contentDescription = "whatsapp", tint = Color(0xFF25D366), modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("الواتساب المباشر: ${config.supportWhatsapp}", fontSize = 12.sp)
                         }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Chat, contentDescription = "whatsapp", tint = Color(0xFF25D366), modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("الواتساب المباشر: ${config.supportWhatsapp}", fontSize = 12.sp)
-                }
+                    }
 
-                // Email
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${config.supportEmail}")))
+                    // Email
+                    if (config.showEmailInAbout && config.supportEmail.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${config.supportEmail}")))
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Mail, contentDescription = "Mail", tint = theme.secondary, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text("البريد الإلكتروني: ${config.supportEmail}", fontSize = 12.sp)
                         }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Mail, contentDescription = "Mail", tint = theme.secondary, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("البريد الإلكتروني: ${config.supportEmail}", fontSize = 12.sp)
+                    }
                 }
             }
         }
 
         // Sharing action
-        Button(
-            onClick = {
-                val shareIntent = Intent().apply {
-                    action = Intent.ACTION_SEND
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "قم بتحميل التحديث الجديد لتطبيق 'كل خدمات اليمن 🇾🇪' - دليل الفنيين والمدراء مع لوحة إدارة وسرعة فائقة دون إنترنت! حمل من الرابط: https://yemenservices.com/download")
-                }
-                context.startActivity(Intent.createChooser(shareIntent, "مشاركة التطبيق"))
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = theme.primary),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Icon(Icons.Default.Share, contentDescription = "مشاركة", tint = Color.White)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("مشاركة دليل خدمات اليمن للآخرين 🚀", color = Color.White, fontWeight = FontWeight.Bold)
+        if (config.showShareInAbout && config.aboutAppShareLink.isNotEmpty()) {
+            Button(
+                onClick = {
+                    val shareIntent = Intent().apply {
+                        action = Intent.ACTION_SEND
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "قم بتحميل التحديث الجديد لتطبيق '${config.appName} 🇾🇪' - دليل الفنيين مع لوحة إدارة وسرعة فائقة دون إنترنت! حمل من الرابط: ${config.aboutAppShareLink}")
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "مشاركة التطبيق"))
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = theme.primary),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.Default.Share, contentDescription = "مشاركة", tint = Color.White)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("مشاركة دليل ${config.appName} للآخرين 🚀", color = Color.White, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -407,7 +435,7 @@ fun RegistrationScreen(viewModel: AppViewModel, config: AdminConfig) {
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Button(
-                colors = ButtonDefaults.buttonColors(containerColor = theme.secondary),
+                colors = ButtonDefaults.buttonColors(containerColor = if (profilePhotoUriSimulated != null) Color(0xFF2E7D32) else theme.secondary),
                 onClick = {
                     if (genderOption == "أنثى") {
                         showFemaleAvatarSelected = true
@@ -420,22 +448,38 @@ fun RegistrationScreen(viewModel: AppViewModel, config: AdminConfig) {
                 },
                 modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.PhotoCamera, "camera")
+                Icon(
+                    imageVector = if (profilePhotoUriSimulated != null) Icons.Default.CheckCircle else Icons.Default.PhotoCamera,
+                    contentDescription = "camera",
+                    tint = if (profilePhotoUriSimulated != null) Color.White else Color.Black
+                )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(if (genderOption == "أنثى") "شعار المهنة (اختياري) 🎨" else "صورة شخصية 👤", fontSize = 10.sp, color = Color.Black)
+                Text(
+                    text = if (profilePhotoUriSimulated != null) "تم التقاط الصورة ✅" else (if (genderOption == "أنثى") "شعار المهنة (اختياري) 🎨" else "صورة شخصية 👤"),
+                    fontSize = 10.sp,
+                    color = if (profilePhotoUriSimulated != null) Color.White else Color.Black
+                )
             }
 
             Button(
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray),
+                colors = ButtonDefaults.buttonColors(containerColor = if (idPhotoUriSimulated != null) Color(0xFF2E7D32) else Color.Gray),
                 onClick = {
                     idPhotoUriSimulated = "https://images.unsplash.com/photo-1554774853-aae0a22c8aa4?w=400"
                     Toast.makeText(context, "تم فحص ورفع صورة كرت المهنة اختيارياً 👍", Toast.LENGTH_SHORT).show()
                 },
                 modifier = Modifier.weight(1.0f)
             ) {
-                Icon(Icons.Default.CardMembership, "License")
+                Icon(
+                    imageVector = if (idPhotoUriSimulated != null) Icons.Default.CheckCircle else Icons.Default.CardMembership,
+                    contentDescription = "License",
+                    tint = Color.White
+                )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("رفع وثيقة المهنة 🗃️", fontSize = 10.sp, color = Color.White)
+                Text(
+                    text = if (idPhotoUriSimulated != null) "تم الرفع بنجاح ✅" else "رفع وثيقة المهنة 🗃️",
+                    fontSize = 10.sp,
+                    color = Color.White
+                )
             }
         }
 

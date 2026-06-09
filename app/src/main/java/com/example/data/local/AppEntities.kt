@@ -68,7 +68,14 @@ data class AdminConfig(
     val twoFactorAuthEnabled: Boolean = false,
     val monthlySubscriptionEnabled: Boolean = true,
     val topBarLayout: String = "home,login,register,lang,refresh", // Sortable top layout order
-    val fontName: String = "sans-serif"
+    val fontName: String = "sans-serif",
+    val aboutAppImage: String = "https://images.unsplash.com/photo-1581092921461-eab62e97a780?w=400",
+    val aboutAppShareLink: String = "https://yemenservices.com/download",
+    val showPhoneInAbout: Boolean = true,
+    val showEmailInAbout: Boolean = true,
+    val showImageInAbout: Boolean = true,
+    val showShareInAbout: Boolean = true,
+    val showWhatsappInAbout: Boolean = true
 )
 
 @Entity(tableName = "chat_messages")

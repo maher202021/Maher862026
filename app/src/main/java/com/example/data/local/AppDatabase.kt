@@ -12,7 +12,7 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 
-class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_direct_db", null, 3) {
+class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_direct_db", null, 4) {
 
     // --- Dynamic Reactive Streams ---
     private val _approvedProvidersFlow = MutableStateFlow<List<Provider>>(emptyList())
@@ -123,7 +123,14 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                 twoFactorAuthEnabled INTEGER,
                 monthlySubscriptionEnabled INTEGER,
                 topBarLayout TEXT,
-                fontName TEXT
+                fontName TEXT,
+                aboutAppImage TEXT,
+                aboutAppShareLink TEXT,
+                showPhoneInAbout INTEGER,
+                showEmailInAbout INTEGER,
+                showImageInAbout INTEGER,
+                showShareInAbout INTEGER,
+                showWhatsappInAbout INTEGER
             )
         """.trimIndent())
 
@@ -147,7 +154,8 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                 supportEmail, supportWhatsapp, adminPassword, adminUsername, footerFontSize, footerOpacity,
                 smartAssistantSizePercent, smartAssistantEnabled, smartAssistantIcon, chatEnabled, chatDisabledMessage,
                 chatIcon, chatColor, chatBubbleSizePercent, maxRadiusSearch, voiceSearchEnabled, loyaltyPointsEnabled,
-                maintenanceMode, maintenanceMessage, twoFactorAuthEnabled, monthlySubscriptionEnabled, topBarLayout, fontName
+                maintenanceMode, maintenanceMessage, twoFactorAuthEnabled, monthlySubscriptionEnabled, topBarLayout, fontName,
+                aboutAppImage, aboutAppShareLink, showPhoneInAbout, showEmailInAbout, showImageInAbout, showShareInAbout, showWhatsappInAbout
             ) VALUES (
                 1, 
                 'اللائحة التنظيمية المفتوحة:\n1. الأمانة والمصداقية المطلقة مع العملاء.\n2. الالتزام بالمواعيد ومستوى جودة الخدمة.\n3. كرت المهنة والبطاقة الشخصية اختيارية للتوثيق لكن تزيد فرصة ظهورك كمهني موثوق.\n4. يحق للإدارة حظر أي حساب في حال وجود شكاوي متكررة.', 
@@ -157,7 +165,8 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                 'support@yemenservices.com', '777644670', 'maher736462', 'WAM2026', 10.0, 0.5,
                 50, 1, '🤖 المساعد', 1, 'تنبيه: تم تعطيل الميزة مؤقتاً للتحديث ومراجعة الاتصالات 🛠️',
                 '💬', '0xFFD4AF37', 50, 50, 1, 1,
-                0, 'التطبيق قيد التطوير والصيانة الدورية حالياً. سنعود بشكل أفضل قريباً جداً 🛠️', 0, 1, 'home,login,register,lang,refresh', 'sans-serif'
+                0, 'التطبيق قيد التطوير والصيانة الدورية حالياً. سنعود بشكل أفضل قريباً جداً 🛠️', 0, 1, 'home,login,register,lang,refresh', 'sans-serif',
+                'https://images.unsplash.com/photo-1581092921461-eab62e97a780?w=400', 'https://yemenservices.com/download', 1, 1, 1, 1, 1
             )
         """.trimIndent())
     }
@@ -212,7 +221,14 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                 twoFactorAuthEnabled = cCursor.getInt(cCursor.getColumnIndexOrThrow("twoFactorAuthEnabled")) == 1,
                 monthlySubscriptionEnabled = cCursor.getInt(cCursor.getColumnIndexOrThrow("monthlySubscriptionEnabled")) == 1,
                 topBarLayout = cCursor.getString(cCursor.getColumnIndexOrThrow("topBarLayout")) ?: "home,login,register,lang,refresh",
-                fontName = cCursor.getString(cCursor.getColumnIndexOrThrow("fontName")) ?: "sans-serif"
+                fontName = cCursor.getString(cCursor.getColumnIndexOrThrow("fontName")) ?: "sans-serif",
+                aboutAppImage = cCursor.getString(cCursor.getColumnIndexOrThrow("aboutAppImage")) ?: "https://images.unsplash.com/photo-1581092921461-eab62e97a780?w=400",
+                aboutAppShareLink = cCursor.getString(cCursor.getColumnIndexOrThrow("aboutAppShareLink")) ?: "https://yemenservices.com/download",
+                showPhoneInAbout = cCursor.getInt(cCursor.getColumnIndexOrThrow("showPhoneInAbout")) == 1,
+                showEmailInAbout = cCursor.getInt(cCursor.getColumnIndexOrThrow("showEmailInAbout")) == 1,
+                showImageInAbout = cCursor.getInt(cCursor.getColumnIndexOrThrow("showImageInAbout")) == 1,
+                showShareInAbout = cCursor.getInt(cCursor.getColumnIndexOrThrow("showShareInAbout")) == 1,
+                showWhatsappInAbout = cCursor.getInt(cCursor.getColumnIndexOrThrow("showWhatsappInAbout")) == 1
             )
         }
         cCursor.close()
@@ -360,7 +376,14 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
             twoFactorAuthEnabled = map["twoFactorAuthEnabled"] as? Boolean ?: false,
             monthlySubscriptionEnabled = map["monthlySubscriptionEnabled"] as? Boolean ?: true,
             topBarLayout = map["topBarLayout"] as? String ?: "home,login,register,lang,refresh",
-            fontName = map["fontName"] as? String ?: "sans-serif"
+            fontName = map["fontName"] as? String ?: "sans-serif",
+            aboutAppImage = map["aboutAppImage"] as? String ?: "https://images.unsplash.com/photo-1581092921461-eab62e97a780?w=400",
+            aboutAppShareLink = map["aboutAppShareLink"] as? String ?: "https://yemenservices.com/download",
+            showPhoneInAbout = map["showPhoneInAbout"] as? Boolean ?: true,
+            showEmailInAbout = map["showEmailInAbout"] as? Boolean ?: true,
+            showImageInAbout = map["showImageInAbout"] as? Boolean ?: true,
+            showShareInAbout = map["showShareInAbout"] as? Boolean ?: true,
+            showWhatsappInAbout = map["showWhatsappInAbout"] as? Boolean ?: true
         )
     }
 
@@ -395,7 +418,10 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                     if (snapshot != null && snapshot.exists()) {
                         try {
                             val remoteConfig = mapToAdminConfig(snapshot.data)
-                            insertAdminConfigLocalOnly(remoteConfig)
+                            val currentConfig = _adminConfigFlow.value
+                            if (currentConfig == null || currentConfig != remoteConfig) {
+                                insertAdminConfigLocalOnly(remoteConfig)
+                            }
                         } catch (ex: Exception) {
                             ex.printStackTrace()
                         }
@@ -688,6 +714,13 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
             put("monthlySubscriptionEnabled", if (config.monthlySubscriptionEnabled) 1 else 0)
             put("topBarLayout", config.topBarLayout)
             put("fontName", config.fontName)
+            put("aboutAppImage", config.aboutAppImage)
+            put("aboutAppShareLink", config.aboutAppShareLink)
+            put("showPhoneInAbout", if (config.showPhoneInAbout) 1 else 0)
+            put("showEmailInAbout", if (config.showEmailInAbout) 1 else 0)
+            put("showImageInAbout", if (config.showImageInAbout) 1 else 0)
+            put("showShareInAbout", if (config.showShareInAbout) 1 else 0)
+            put("showWhatsappInAbout", if (config.showWhatsappInAbout) 1 else 0)
         }
         db.insertWithOnConflict("admin_config", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
         refreshData()
@@ -730,7 +763,14 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                 "twoFactorAuthEnabled" to config.twoFactorAuthEnabled,
                 "monthlySubscriptionEnabled" to config.monthlySubscriptionEnabled,
                 "topBarLayout" to config.topBarLayout,
-                "fontName" to config.fontName
+                "fontName" to config.fontName,
+                "aboutAppImage" to config.aboutAppImage,
+                "aboutAppShareLink" to config.aboutAppShareLink,
+                "showPhoneInAbout" to config.showPhoneInAbout,
+                "showEmailInAbout" to config.showEmailInAbout,
+                "showImageInAbout" to config.showImageInAbout,
+                "showShareInAbout" to config.showShareInAbout,
+                "showWhatsappInAbout" to config.showWhatsappInAbout
             )
             firestore.collection("settings").document("admin_config").set(map)
         } catch (ex: Exception) {

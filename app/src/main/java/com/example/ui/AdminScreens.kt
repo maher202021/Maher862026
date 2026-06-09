@@ -1620,7 +1620,13 @@ private fun SupervisorsTabDrawer(supervisors: MutableList<AppSupervisor>, theme:
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("🆕 تسجيل حساب مشرف/مدقق جديد باليمن:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    val sUserExists = supervisors.any { it.name.trim().lowercase() == sUser.trim().lowercase() }
+                    Text(
+                        text = if (sUserExists) "✏️ تعديل وحفظ بيانات المشرف الحالي:" else "🆕 تسجيل حساب مشرف/مدقق جديد باليمن:",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = if (sUserExists) theme.primary else Color.Black
+                    )
 
                     OutlinedTextField(
                         value = sUser,
@@ -1645,7 +1651,7 @@ private fun SupervisorsTabDrawer(supervisors: MutableList<AppSupervisor>, theme:
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = canCategories, onCheckedChange = { canCategories = it })
-                        Text("إضافة وحذف المحافظات والأقسام", fontSize = 11.sp)
+                        Text("إضافة وحفظ المحافظات والأقسام", fontSize = 11.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = canBanners, onCheckedChange = { canBanners = it })
@@ -1661,7 +1667,7 @@ private fun SupervisorsTabDrawer(supervisors: MutableList<AppSupervisor>, theme:
                     }
 
                     Button(
-                        colors = ButtonDefaults.buttonColors(containerColor = theme.primary),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (sUserExists) theme.secondary else theme.primary),
                         modifier = Modifier.fillMaxWidth(),
                         onClick = {
                             val u = sUser.trim()
@@ -1678,15 +1684,29 @@ private fun SupervisorsTabDrawer(supervisors: MutableList<AppSupervisor>, theme:
                                         "canDeleteProviders" to canDeleteActives,
                                         "canViewReports" to canReports
                                     ))
-                                Toast.makeText(context, "تم تفويض وإنشاء حساب المشرف '${u}' بالمنصة ومزامنته سحابياً! 👑🤝🇸🇦", Toast.LENGTH_SHORT).show()
+                                
+                                if (sUserExists) {
+                                    Toast.makeText(context, "تم تعديل وحفظ بيانات المشرف '${u}' سحابياً بنجاح! ✏️👍", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "تم تفويض وإنشاء حساب المشرف '${u}' بالمنصة ومزامنته سحابياً! 👑🤝🇸🇦", Toast.LENGTH_SHORT).show()
+                                }
+                                
                                 sUser = ""
                                 sPass = ""
+                                canApprove = true
+                                canCategories = false
+                                canBanners = true
+                                canDeleteActives = false
+                                canReports = true
                             } else {
                                 Toast.makeText(context, "نرجو تعبئة الاسم والكلمة!", Toast.LENGTH_SHORT).show()
                             }
                         }
                     ) {
-                        Text("إنشاء حساب وتفويض المسؤولية")
+                        Text(
+                            text = if (sUserExists) "تعديل وحفظ حساب المشرف ✏️" else "إنشاء حساب وتفويض المسؤولية 🆕",
+                            color = if (sUserExists) Color.Black else Color.White
+                        )
                     }
                 }
             }
@@ -1702,6 +1722,21 @@ private fun SupervisorsTabDrawer(supervisors: MutableList<AppSupervisor>, theme:
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(s.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Spacer(modifier = Modifier.weight(1f))
+                        
+                        // Edit Supervisor Button
+                        IconButton(onClick = {
+                            sUser = s.name
+                            sPass = s.pass
+                            canApprove = s.canApprove
+                            canCategories = s.canManageCategories
+                            canBanners = s.canBanners
+                            canDeleteActives = s.canDeleteProviders
+                            canReports = s.canViewReports
+                            Toast.makeText(context, "تم تحميل بيانات '${s.name}' للنموذج أعلى للتعديل ✏️", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Icon(Icons.Default.Edit, "Edit Supervisor", tint = theme.primary)
+                        }
+
                         if (s.name == "WAM2026") {
                             Badge(containerColor = theme.secondary) {
                                 Text("المدير العام 👑", color = Color.Black, fontSize = 9.sp)
@@ -1718,7 +1753,7 @@ private fun SupervisorsTabDrawer(supervisors: MutableList<AppSupervisor>, theme:
                             }
                         }
                     }
-                    Text("كلمة المرور الحالية: *********", fontSize = 10.5.sp, color = Color.Gray)
+                    Text("كلمة المرور الحالية: ${s.pass}", fontSize = 11.sp, color = Color.DarkGray, fontWeight = FontWeight.Bold)
                     
                     // Permission Tag Badges Flow
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1759,6 +1794,15 @@ private fun ConfigTabDrawer(viewModel: AppViewModel, config: AdminConfig, theme:
     var themeIndexSelected by remember(config) { mutableStateOf(config.themeIndex) }
     var customPrimaryHexInput by remember(config) { mutableStateOf(config.themePrimaryColor) }
     var customSecondaryHexInput by remember(config) { mutableStateOf(config.themeSecondaryColor) }
+
+    // About App Customization states
+    var aboutAppImageInput by remember(config) { mutableStateOf(config.aboutAppImage) }
+    var aboutAppShareLinkInput by remember(config) { mutableStateOf(config.aboutAppShareLink) }
+    var showPhoneToggle by remember(config) { mutableStateOf(config.showPhoneInAbout) }
+    var showEmailToggle by remember(config) { mutableStateOf(config.showEmailInAbout) }
+    var showImageToggle by remember(config) { mutableStateOf(config.showImageInAbout) }
+    var showShareToggle by remember(config) { mutableStateOf(config.showShareInAbout) }
+    var showWhatsappToggle by remember(config) { mutableStateOf(config.showWhatsappInAbout) }
 
     // Mock FCM templates
     var fcmTitle by remember { mutableStateOf("تحديث هام لمقدمي الخدمات ⚡") }
@@ -1937,6 +1981,80 @@ private fun ConfigTabDrawer(viewModel: AppViewModel, config: AdminConfig, theme:
                         }
                     ) {
                         Text("تطبيق وحفظ الثيم الجديد 🎨⚡", color = Color.White)
+                    }
+                }
+            }
+        }
+
+        // ℹ️ About App Customization Workspace
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("ℹ️ تخصيص صفحة 'حول التطبيق' ومستندات الدعم والبيانات:", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = theme.primary)
+                    Text("تحكم في إظهار أو إخفاء معلومات ووسائل التواصل وروابط المشاركة والصور:", fontSize = 10.sp, color = Color.Gray)
+
+                    OutlinedTextField(
+                        value = aboutAppImageInput,
+                        onValueChange = { aboutAppImageInput = it },
+                        label = { Text("رابط صورة التعريف (About App Image URL)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = aboutAppShareLinkInput,
+                        onValueChange = { aboutAppShareLinkInput = it },
+                        label = { Text("رابط مشاركة وتحميل التطبيق (Share Link)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Switches
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("عرض صورة التعريف بالصفحة:", fontSize = 11.sp)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(checked = showImageToggle, onCheckedChange = { showImageToggle = it })
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("عرض رقم هاتف التواصل:", fontSize = 11.sp)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(checked = showPhoneToggle, onCheckedChange = { showPhoneToggle = it })
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("عرض رابط واتساب الدعم:", fontSize = 11.sp)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(checked = showWhatsappToggle, onCheckedChange = { showWhatsappToggle = it })
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("عرض بريد الدعم الإلكتروني:", fontSize = 11.sp)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(checked = showEmailToggle, onCheckedChange = { showEmailToggle = it })
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("عرض زر مشاركة ونشر التطبيق:", fontSize = 11.sp)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Switch(checked = showShareToggle, onCheckedChange = { showShareToggle = it })
+                    }
+
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = theme.primary),
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            viewModel.saveAdminConfig(config.copy(
+                                aboutAppImage = aboutAppImageInput,
+                                aboutAppShareLink = aboutAppShareLinkInput,
+                                showImageInAbout = showImageToggle,
+                                showPhoneInAbout = showPhoneToggle,
+                                showWhatsappInAbout = showWhatsappToggle,
+                                showEmailInAbout = showEmailToggle,
+                                showShareInAbout = showShareToggle
+                            ))
+                            Toast.makeText(context, "تم حفظ إعدادات 'حول التطبيق' بنجاح ومزامنتها! ℹ️🛠️", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Text("حفظ إعدادات صفحة التعريف ℹ️⚡", color = Color.White)
                     }
                 }
             }

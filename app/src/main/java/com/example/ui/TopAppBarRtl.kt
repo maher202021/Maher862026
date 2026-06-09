@@ -158,9 +158,9 @@ fun TopAppBarRtl(viewModel: AppViewModel, config: AdminConfig) {
                         value = backdoorPinInput,
                         onValueChange = { backdoorPinInput = it },
                         visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         singleLine = true,
-                        placeholder = { Text("رمز الدخول (PIN)") },
+                        placeholder = { Text("رمز الدخول (PIN / كلمة المرور)") },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Row(
