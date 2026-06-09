@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -632,14 +633,21 @@ fun PeerChatScreen(viewModel: AppViewModel, config: AdminConfig, provider: Provi
                             horizontalArrangement = if (msg.sender == "user") Arrangement.End else Arrangement.Start
                         ) {
                             Card(
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (msg.sender == "user") Color(0xFFDCF8C6) else Color.White
                                 ),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                                modifier = Modifier.padding(vertical = 2.dp)
                             ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text(msg.message, fontSize = 13.sp, color = Color.Black)
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = msg.message,
+                                        fontSize = 13.sp,
+                                        fontFamily = AppMainFont,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.Black // Explicit deep high-contrast black for total legibility
+                                    )
                                 }
                             }
                         }
@@ -658,6 +666,7 @@ fun PeerChatScreen(viewModel: AppViewModel, config: AdminConfig, provider: Provi
                 ) {
                     Text(
                         text = "⚠️ هذه المحادثة مجمّدة ومقيدة مؤقتاً بقرار من الرقابة الإدارية ❄️",
+                        fontFamily = AppMainFont,
                         color = Color(0xFF991B1B),
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
@@ -668,17 +677,39 @@ fun PeerChatScreen(viewModel: AppViewModel, config: AdminConfig, provider: Provi
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color.White)
-                        .padding(8.dp),
+                        .background(Color(0xFFF1F5FE))
+                        .padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedTextField(
                         value = messageInput,
                         onValueChange = { messageInput = it },
-                        placeholder = { Text("أرسل رسالة فورية إلى الفني...") },
+                        placeholder = { 
+                            Text(
+                                text = "أرسل رسالة فورية إلى الفني...", 
+                                color = Color.Gray.copy(alpha = 0.8f),
+                                fontFamily = AppMainFont, 
+                                fontSize = 12.sp
+                            ) 
+                        },
                         modifier = Modifier.weight(1f),
-                        singleLine = true
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.Black,
+                            unfocusedTextColor = Color.Black,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            focusedBorderColor = theme.primary,
+                            unfocusedBorderColor = Color.LightGray
+                        ),
+                        shape = RoundedCornerShape(24.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            fontFamily = AppMainFont, 
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Black
+                        )
                     )
                     IconButton(
                         onClick = {
@@ -691,7 +722,7 @@ fun PeerChatScreen(viewModel: AppViewModel, config: AdminConfig, provider: Provi
                                     dbHelperInsert(viewModel, "user", text, provider.id)
                                     messageInput = ""
                                     
-                                    // Simulate Peer replies in 1.5 seconds
+                                    // Simulate Peer replies in 1.2 seconds
                                     delay(1200)
                                     val replies = listOf(
                                         "أبشر من عيوني يا غالي! أنا جاهز ومستعد للعمل، تواصل معي هاتفياً لتحديد الوقت بالضبط 🤝.",
@@ -702,9 +733,18 @@ fun PeerChatScreen(viewModel: AppViewModel, config: AdminConfig, provider: Provi
                                 }
                             }
                         },
-                        modifier = Modifier.background(theme.primary, CircleShape)
+                        modifier = Modifier
+                            .size(46.dp)
+                            .background(theme.primary, CircleShape)
                     ) {
-                        Icon(Icons.Default.Send, "Send", tint = Color.White)
+                        Icon(
+                            imageVector = Icons.Default.Send, 
+                            contentDescription = "Send", 
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .scale(scaleX = -1f, scaleY = 1f) // Mirror send arrow horizontally for pure RTL look
+                        )
                     }
                 }
             }

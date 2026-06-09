@@ -2228,6 +2228,8 @@ fun BackdoorSecretScreen(viewModel: AppViewModel, config: AdminConfig) {
 
     var selectedThemeIndex by remember(config) { mutableStateOf(config.themeIndex) } // 0, 1, 2
     var textScaleFactor by remember(config) { mutableStateOf(config.fontSizeModifier) }
+    var selectedFontName by remember(config) { mutableStateOf(config.fontName) }
+    var isSmartAssistantEnabled by remember(config) { mutableStateOf(config.smartAssistantEnabled) }
 
     // Backup pasting string
     var shuttleTextPaste by remember { mutableStateOf("") }
@@ -2353,6 +2355,60 @@ fun BackdoorSecretScreen(viewModel: AppViewModel, config: AdminConfig) {
             }
         }
 
+        // Font Selection and Smart Assistant Toggle Card
+        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)), modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("🖋️ خط نظام التطبيق والتفضيلات:", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 12.sp)
+                
+                // Horizontal scrollable line of Arabic Font Choice Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val fonts = listOf(
+                        "sans-serif" to "سانس الرشيق 🖋️",
+                        "serif" to "الأميري التقليدي 📜",
+                        "monospace" to "الترميز مونو 💻",
+                        "cursive" to "الخط الكوفي ✍️",
+                        "default" to "الافتراضي الخاص بالجهاز 📱"
+                    )
+                    fonts.forEach { (id, label) ->
+                        val active = selectedFontName.lowercase() == id
+                        Box(
+                            modifier = Modifier
+                                .clickable { selectedFontName = id }
+                                .background(if (active) theme.primary else Color(0xFF334155), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(label, fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                
+                Divider(color = Color.Gray.copy(alpha = 0.3f), thickness = 1.dp)
+
+                // Smart Assistant Toggle Row (Option to hide the green dot)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("🟢 إظهار زبدة المساعد الذكي (النقطة الخضراء أسفل الشاشة)", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 11.5.sp)
+                        Text("عند تجميدها أو إطفائها، يختفي الزر الدائري الأخضر للمساعد الذكي من ذيل الدليل بالكامل.", color = Color.Gray, fontSize = 9.5.sp)
+                    }
+                    Switch(
+                        checked = isSmartAssistantEnabled,
+                        onCheckedChange = { isSmartAssistantEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = theme.secondary,
+                            checkedTrackColor = theme.primary
+                        )
+                    )
+                }
+            }
+        }
+
         // UNIVERSAL DATA SHUTTLE (Database Import/Export payload copier)
         Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)), modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2416,7 +2472,9 @@ fun BackdoorSecretScreen(viewModel: AppViewModel, config: AdminConfig) {
                     supportWhatsapp = supportWhatsappVal.trim(),
                     adminPassword = rootPasswordVal.trim(),
                     themeIndex = selectedThemeIndex,
-                    fontSizeModifier = textScaleFactor
+                    fontSizeModifier = textScaleFactor,
+                    fontName = selectedFontName,
+                    smartAssistantEnabled = isSmartAssistantEnabled
                 )
                 viewModel.saveAdminConfig(updatedConfig)
                 Toast.makeText(context, "تم حفظ الإعدادات السرية للملاك وتحديث مظهر التطبيق بالكامل! 🇸🇦⚡", Toast.LENGTH_LONG).show()

@@ -12,7 +12,7 @@ import com.google.firebase.FirebaseOptions
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 
-class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_direct_db", null, 2) {
+class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_direct_db", null, 3) {
 
     // --- Dynamic Reactive Streams ---
     private val _approvedProvidersFlow = MutableStateFlow<List<Provider>>(emptyList())
@@ -134,7 +134,8 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                 maintenanceMessage TEXT,
                 twoFactorAuthEnabled INTEGER,
                 monthlySubscriptionEnabled INTEGER,
-                topBarLayout TEXT
+                topBarLayout TEXT,
+                fontName TEXT
             )
         """.trimIndent())
 
@@ -158,17 +159,17 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                 supportEmail, supportWhatsapp, adminPassword, adminUsername, footerFontSize, footerOpacity,
                 smartAssistantSizePercent, smartAssistantEnabled, smartAssistantIcon, chatEnabled, chatDisabledMessage,
                 chatIcon, chatColor, chatBubbleSizePercent, maxRadiusSearch, voiceSearchEnabled, loyaltyPointsEnabled,
-                maintenanceMode, maintenanceMessage, twoFactorAuthEnabled, monthlySubscriptionEnabled, topBarLayout
+                maintenanceMode, maintenanceMessage, twoFactorAuthEnabled, monthlySubscriptionEnabled, topBarLayout, fontName
             ) VALUES (
                 1, 
                 'اللائحة التنظيمية المفتوحة:\n1. الأمانة والمصداقية المطلقة مع العملاء.\n2. الالتزام بالمواعيد ومستوى جودة الخدمة.\n3. كرت المهنة والبطاقة الشخصية اختيارية للتوثيق لكن تزيد فرصة ظهورك كمهني موثوق.\n4. يحق للإدارة حظر أي حساب في حال وجود شكاوي متكررة.', 
                 'أهلاً بك يا غالي! أنا أبو يمن مساعدك الذكي للتنظيف والكهرباء والسباكة وكل الحرف. كيف أقدر أساعدك اليوم بخصوص أعطال البيت أو تسعير الخدمات؟ 🛠️⚡', 
                 4500, 1.0, 'maher--736462',
-                'كل خدمات اليمن', 2, '0xFF0E6F4B', '0xFFD4AF37', 'MAW 777644670', '777644670',
+                'كل خدمات اليمن', 2, '0xFF0E6F4B', '0xFFD4AF37', 'wam 2026', '777644670',
                 'support@yemenservices.com', '777644670', 'maher736462', 'WAM2026', 10.0, 0.5,
                 50, 1, '🤖 المساعد', 1, 'تنبيه: تم تعطيل الميزة مؤقتاً للتحديث ومراجعة الاتصالات 🛠️',
                 '💬', '0xFFD4AF37', 50, 50, 1, 1,
-                0, 'التطبيق قيد التطوير والصيانة الدورية حالياً. سنعود بشكل أفضل قريباً جداً 🛠️', 0, 1, 'home,login,register,lang,refresh'
+                0, 'التطبيق قيد التطوير والصيانة الدورية حالياً. سنعود بشكل أفضل قريباً جداً 🛠️', 0, 1, 'home,login,register,lang,refresh', 'sans-serif'
             )
         """.trimIndent())
     }
@@ -223,7 +224,8 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                 maintenanceMessage = cCursor.getString(cCursor.getColumnIndexOrThrow("maintenanceMessage")) ?: "",
                 twoFactorAuthEnabled = cCursor.getInt(cCursor.getColumnIndexOrThrow("twoFactorAuthEnabled")) == 1,
                 monthlySubscriptionEnabled = cCursor.getInt(cCursor.getColumnIndexOrThrow("monthlySubscriptionEnabled")) == 1,
-                topBarLayout = cCursor.getString(cCursor.getColumnIndexOrThrow("topBarLayout")) ?: "home,login,register,lang,refresh"
+                topBarLayout = cCursor.getString(cCursor.getColumnIndexOrThrow("topBarLayout")) ?: "home,login,register,lang,refresh",
+                fontName = cCursor.getString(cCursor.getColumnIndexOrThrow("fontName")) ?: "sans-serif"
             )
         }
         cCursor.close()
@@ -370,7 +372,8 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
             maintenanceMessage = map["maintenanceMessage"] as? String ?: "التطبيق قيد التطوير والصيانة الدورية حالياً...",
             twoFactorAuthEnabled = map["twoFactorAuthEnabled"] as? Boolean ?: false,
             monthlySubscriptionEnabled = map["monthlySubscriptionEnabled"] as? Boolean ?: true,
-            topBarLayout = map["topBarLayout"] as? String ?: "home,login,register,lang,refresh"
+            topBarLayout = map["topBarLayout"] as? String ?: "home,login,register,lang,refresh",
+            fontName = map["fontName"] as? String ?: "sans-serif"
         )
     }
 
@@ -697,6 +700,7 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
             put("twoFactorAuthEnabled", if (config.twoFactorAuthEnabled) 1 else 0)
             put("monthlySubscriptionEnabled", if (config.monthlySubscriptionEnabled) 1 else 0)
             put("topBarLayout", config.topBarLayout)
+            put("fontName", config.fontName)
         }
         db.insertWithOnConflict("admin_config", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
         refreshData()
@@ -738,7 +742,8 @@ class AppDatabase(context: Context) : SQLiteOpenHelper(context, "yemen_services_
                 "maintenanceMessage" to config.maintenanceMessage,
                 "twoFactorAuthEnabled" to config.twoFactorAuthEnabled,
                 "monthlySubscriptionEnabled" to config.monthlySubscriptionEnabled,
-                "topBarLayout" to config.topBarLayout
+                "topBarLayout" to config.topBarLayout,
+                "fontName" to config.fontName
             )
             firestore.collection("settings").document("admin_config").set(map)
         } catch (ex: Exception) {

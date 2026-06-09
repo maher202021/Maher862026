@@ -32,6 +32,7 @@ data class ThemeColors(
 )
 
 fun resolveTheme(config: AdminConfig): ThemeColors {
+    updateGlobalFont(config.fontName)
     return when (config.themeIndex) {
         0 -> ThemeColors(SlatePrimary, SlateBg, SlateCard, Color.White, AccentYemeniGold)
         1 -> ThemeColors(GoldPrimary, GoldBg, GoldCard, Color.White, GoldPrimary)
@@ -53,7 +54,17 @@ fun resolveTheme(config: AdminConfig): ThemeColors {
     }
 }
 
-val AppMainFont = FontFamily.SansSerif
+var AppMainFont: FontFamily = FontFamily.SansSerif
+
+fun updateGlobalFont(fontName: String?) {
+    AppMainFont = when (fontName?.lowercase()) {
+        "sansserif", "sans-serif" -> FontFamily.SansSerif
+        "serif" -> FontFamily.Serif
+        "monospace" -> FontFamily.Monospace
+        "cursive" -> FontFamily.Cursive
+        else -> FontFamily.Default
+    }
+}
 
 // Yemeni formula validator
 fun isValidYemeniMobile(num: String): Boolean {

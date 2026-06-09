@@ -31,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.local.AdminConfig
@@ -43,6 +44,24 @@ fun AppNavigationScaffold(viewModel: AppViewModel) {
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
     val config by viewModel.adminConfig.collectAsStateWithLifecycle()
     val theme = resolveTheme(config)
+
+    val context = LocalContext.current
+    val activity = remember(context) { context as? android.app.Activity }
+    var backPressedTime by remember { mutableLongStateOf(0L) }
+
+    BackHandler(enabled = true) {
+        if (currentScreen != "home") {
+            viewModel.navigateTo("home")
+        } else {
+            val now = System.currentTimeMillis()
+            if (now - backPressedTime < 2000L) {
+                activity?.finish()
+            } else {
+                backPressedTime = now
+                Toast.makeText(context, "إضغط مرة أخرى للخروج من التطبيق 🏃", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     // Keep reference to selected provider for peer chat
     var selectedPeerChatProvider by remember { mutableStateOf<Provider?>(null) }
@@ -120,11 +139,15 @@ fun AppNavigationScaffold(viewModel: AppViewModel) {
                         )
 
                         // Right: Floating Smart Assistant Toggle Button Bubble
-                        IconButton(
-                            onClick = { viewModel.navigateTo("chat") },
-                            modifier = Modifier.size(34.dp).background(theme.primary, CircleShape)
-                        ) {
-                            Icon(Icons.Default.AutoAwesome, "Assistant", tint = Color.White, modifier = Modifier.size(17.dp))
+                        if (config.smartAssistantEnabled) {
+                            IconButton(
+                                onClick = { viewModel.navigateTo("chat") },
+                                modifier = Modifier.size(34.dp).background(theme.primary, CircleShape)
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, "Assistant", tint = Color.White, modifier = Modifier.size(17.dp))
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.size(34.dp))
                         }
                     }
                 }

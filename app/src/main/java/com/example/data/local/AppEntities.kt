@@ -44,7 +44,7 @@ data class AdminConfig(
     val themeIndex: Int = 2, // 0 = Cosmic Slate, 1 = Charcoal Gold, 2 = Royal Emerald (default)
     val themePrimaryColor: String = "0xFF0E6F4B",
     val themeSecondaryColor: String = "0xFFD4AF37",
-    val sponsorFooter: String = "MAW 777644670",
+    val sponsorFooter: String = "wam 2026",
     val supportPhone: String = "777644670",
     val supportEmail: String = "support@yemenservices.com",
     val supportWhatsapp: String = "777644670",
@@ -67,7 +67,8 @@ data class AdminConfig(
     val maintenanceMessage: String = "التطبيق قيد التطوير والصيانة الدورية حالياً. سنعود بشكل أفضل قريباً جداً 🛠️",
     val twoFactorAuthEnabled: Boolean = false,
     val monthlySubscriptionEnabled: Boolean = true,
-    val topBarLayout: String = "home,login,register,lang,refresh" // Sortable top layout order
+    val topBarLayout: String = "home,login,register,lang,refresh", // Sortable top layout order
+    val fontName: String = "sans-serif"
 )
 
 @Entity(tableName = "chat_messages")
