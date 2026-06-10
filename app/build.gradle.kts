@@ -81,21 +81,21 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
 
     // Direct SQLite database (no Room compiler needed)
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
+    // implementation(libs.androidx.room.runtime)
+    // implementation(libs.androidx.room.ktx)
 
     // Network & Runtime GSON conversion
-    implementation(libs.retrofit)
-    implementation(libs.retrofit.converter.gson)
-    implementation(libs.gson)
-    implementation(libs.okhttp)
+    // implementation(libs.retrofit)
+    // implementation(libs.retrofit.converter.gson)
+    // implementation(libs.gson)
+    // implementation(libs.okhttp)
 
     // Image loading
-    implementation(libs.coil.compose)
+    // implementation(libs.coil.compose)
 
     // Firebase
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.firestore)
+    // implementation(platform(libs.firebase.bom))
+    // implementation(libs.firebase.firestore)
 
     // Testing (optional/standard unit tests)
     testImplementation(libs.junit)
