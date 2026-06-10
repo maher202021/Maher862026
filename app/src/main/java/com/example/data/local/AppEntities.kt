@@ -88,3 +88,14 @@ data class ChatMessage(
     val timestamp: Long = System.currentTimeMillis(),
     val isRead: Boolean = false
 )
+
+data class AppSupervisor(
+    val name: String,
+    val pass: String,
+    val canApprove: Boolean = true,
+    val canManageCategories: Boolean = true,
+    val canBanners: Boolean = true,
+    val canDeleteProviders: Boolean = true,
+    val canViewReports: Boolean = true
+)
+
