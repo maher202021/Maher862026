@@ -29,22 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
-import com.example.data.local.AdminConfig
-import com.example.data.local.Provider
-import com.example.data.local.ChatMessage
+import com.example.data.local.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-// Supervisor data class for custom simulation permissions as requested
-data class AppSupervisor(
-    val name: String,
-    val pass: String,
-    val canApprove: Boolean = true,
-    val canManageCategories: Boolean = true,
-    val canBanners: Boolean = true,
-    val canDeleteProviders: Boolean = true,
-    val canViewReports: Boolean = true
-)
 
 // List of audit actions simulated for the ledger
 data class AuditLogEntry(
@@ -53,28 +40,6 @@ data class AuditLogEntry(
     val user: String,
     val action: String,
     val details: String
-)
-
-// Simulated technical complaints list for Tab 6
-data class TechnicalReport(
-    val id: Int,
-    val title: String,
-    val complainant: String,
-    val technician: String,
-    val priority: String, // "High", "Medium", "Low"
-    val date: String,
-    val description: String
-)
-
-// Simulated Custom Banner model
-data class CustomAdBanner(
-    val id: Int,
-    val title: String,
-    val mediaType: String, // "صورة", "فيديو", "نص"
-    val section: String,   // "الرئيسية", "قائمة الأقسام"
-    val size: String,      // "صغير S", "متوسط M", "عريض L"
-    val durationSeconds: Int,
-    val isActive: Boolean
 )
 
 // ===============================================
@@ -99,7 +64,7 @@ fun AdminScreen(viewModel: AppViewModel, config: AdminConfig) {
 
     // Simulated states representing dynamic tables to maintain complete functional loop
     val supervisorsList = remember {
-        mutableStateListOf(
+        mutableStateListOf<AppSupervisor>(
             AppSupervisor("WAM2026", "maher736462", true, true, true, true, true),
             AppSupervisor("mod1", "password123", true, false, true, false, true),
             AppSupervisor("supervisor_ali", "ali2026", true, true, false, true, false)
@@ -107,7 +72,7 @@ fun AdminScreen(viewModel: AppViewModel, config: AdminConfig) {
     }
 
     val technicalReportsList = remember {
-        mutableStateListOf(
+        mutableStateListOf<TechnicalReport>(
             TechnicalReport(1, "شكوى تسعيرة مفرطة في السباكة", "صالح محمد", "عادل السباك", "High", "2026-06-07", "أخذ الحرفي مبلغ أعلى من المتفق عليه مسبقاً بخصوص صيانة حنفية المطبخ."),
             TechnicalReport(2, "تأخير غير مبرر في مواعيد الخدمة", "أحمد عمران", "سمير الكهربائي", "Medium", "2026-06-08", "تأخر عن موعد تصليح لوحة التوزيع الكهربائية لأكثر من 5 ساعات دون عذر."),
             TechnicalReport(3, "طلب تعديل عنوان الورشة بالدليل", "ماجد اليماني", "الحرفي ماجد", "Low", "2026-06-08", "الفني يطلب من المشرفين تحديث عنوان مقر عمله من شارع تعز إلى شارع الخمسين.")
@@ -115,7 +80,7 @@ fun AdminScreen(viewModel: AppViewModel, config: AdminConfig) {
     }
 
     val activeBannersList = remember {
-        mutableStateListOf(
+        mutableStateListOf<CustomAdBanner>(
             CustomAdBanner(1, "تخفيضات موسم الأمطار على عوازل السباكة 🌧️", "صورة", "الرئيسية", "عريض L", 12, true),
             CustomAdBanner(2, "تنبيه غسيل فلاتر المكيفات قبل الصيف ❄️", "نص", "قائمة الأقسام", "متوسط M", 6, true)
         )
@@ -170,7 +135,7 @@ fun AdminScreen(viewModel: AppViewModel, config: AdminConfig) {
                         )
                         for (s in defaults) {
                             firestore.collection("supervisors").document(s.name)
-                                .set(mapOf(
+                                .set(mapOf<String, Any>(
                                     "name" to s.name,
                                     "pass" to s.pass,
                                     "canApprove" to s.canApprove,
@@ -223,6 +188,99 @@ fun AdminScreen(viewModel: AppViewModel, config: AdminConfig) {
                         val defaults = listOf("كهرباء وإلكترونيات", "سباكة وصحي", "نجارة وديكور", "تكييف وتبريد", "حدادة وألومنيوم", "خياطة وتفصيل", "أخرى")
                         for (c in defaults) {
                             firestore.collection("categories").document(c).set(mapOf("name" to c))
+                        }
+                    }
+                }
+            }
+
+        // 4. Listen for Banners List
+        firestore.collection("banners")
+            .addSnapshotListener { snapshot, error ->
+                if (snapshot != null) {
+                    val loaded = mutableListOf<CustomAdBanner>()
+                    for (doc in snapshot.documents) {
+                        try {
+                            val idVal = (doc.getLong("id") ?: 0L).toInt()
+                            val titleStr = doc.getString("title") ?: ""
+                            val mediaTypeStr = doc.getString("mediaType") ?: "صورة"
+                            val sectionStr = doc.getString("section") ?: "الرئيسية"
+                            val sizeStr = doc.getString("size") ?: "عريض L"
+                            val durationInt = (doc.getLong("durationSeconds") ?: 10L).toInt()
+                            val isActiveVal = doc.getBoolean("isActive") ?: true
+                            
+                            if (titleStr.isNotEmpty()) {
+                                loaded.add(CustomAdBanner(idVal, titleStr, mediaTypeStr, sectionStr, sizeStr, durationInt, isActiveVal))
+                            }
+                        } catch (ex: Exception) {
+                            ex.printStackTrace()
+                        }
+                    }
+                    if (loaded.isNotEmpty()) {
+                        activeBannersList.clear()
+                        activeBannersList.addAll(loaded)
+                    } else {
+                        // Prepopulate default banners
+                        val defaults = listOf(
+                            CustomAdBanner(1, "تخفيضات موسم الأمطار على عوازل السباكة 🌧️", "صورة", "الرئيسية", "عريض L", 12, true),
+                            CustomAdBanner(2, "تنبيه غسيل فلاتر المكيفات قبل الصيف ❄️", "نص", "قائمة الأقسام", "متوسط M", 6, true)
+                        )
+                        for (b in defaults) {
+                            firestore.collection("banners").document(b.title).set(mapOf<String, Any>(
+                                "id" to b.id,
+                                "title" to b.title,
+                                "mediaType" to b.mediaType,
+                                "section" to b.section,
+                                "size" to b.size,
+                                "durationSeconds" to b.durationSeconds,
+                                "isActive" to b.isActive
+                            ))
+                        }
+                    }
+                }
+            }
+
+        // 5. Listen for Technical Reports (Complaints) List
+        firestore.collection("reports")
+            .addSnapshotListener { snapshot, error ->
+                if (snapshot != null) {
+                    val loaded = mutableListOf<TechnicalReport>()
+                    for (doc in snapshot.documents) {
+                        try {
+                            val idVal = (doc.getLong("id") ?: 0L).toInt()
+                            val titleStr = doc.getString("title") ?: ""
+                            val complainantStr = doc.getString("complainant") ?: ""
+                            val technicianStr = doc.getString("technician") ?: ""
+                            val priorityStr = doc.getString("priority") ?: "Medium"
+                            val dateStr = doc.getString("date") ?: ""
+                            val descriptionStr = doc.getString("description") ?: ""
+                            
+                            if (titleStr.isNotEmpty()) {
+                                loaded.add(TechnicalReport(idVal, titleStr, complainantStr, technicianStr, priorityStr, dateStr, descriptionStr))
+                            }
+                        } catch (ex: Exception) {
+                            ex.printStackTrace()
+                        }
+                    }
+                    if (loaded.isNotEmpty()) {
+                        technicalReportsList.clear()
+                        technicalReportsList.addAll(loaded)
+                    } else {
+                        // Prepopulate default reports
+                        val defaults = listOf(
+                            TechnicalReport(1, "شكوى تسعيرة مفرطة في السباكة", "صالح محمد", "عادل السباك", "High", "2026-06-07", "أخذ الحرفي مبلغ أعلى من المتفق عليه مسبقاً بخصوص صيانة حنفية المطبخ."),
+                            TechnicalReport(2, "تأخير غير مبرر في مواعيد الخدمة", "أحمد عمران", "سمير الكهربائي", "Medium", "2026-06-08", "تأخر عن موعد تصليح لوحة التوزيع الكهربائية لأكثر من 5 ساعات دون عذر."),
+                            TechnicalReport(3, "طلب تعديل عنوان الورشة بالدليل", "ماجد اليماني", "الحرفي ماجد", "Low", "2026-06-08", "الفني يطلب من المشرفين تحديث عنوان مقر عمله من شارع تعز إلى شارع الخمسين.")
+                        )
+                        for (r in defaults) {
+                            firestore.collection("reports").document(r.id.toString()).set(mapOf<String, Any>(
+                                "id" to r.id,
+                                "title" to r.title,
+                                "complainant" to r.complainant,
+                                "technician" to r.technician,
+                                "priority" to r.priority,
+                                "date" to r.date,
+                                "description" to r.description
+                            ))
                         }
                     }
                 }
@@ -1017,7 +1075,18 @@ private fun BannersTabDrawer(banners: MutableList<CustomAdBanner>, theme: ThemeC
                         onClick = {
                             val text = bTitle.trim()
                             if (text.isNotEmpty()) {
-                                banners.add(CustomAdBanner(banners.size + 1, text, bType, bSection, bSize, bDuration.toInt(), true))
+                                val newBanner = CustomAdBanner(banners.size + 1, text, bType, bSection, bSize, bDuration.toInt(), true)
+                                banners.add(newBanner)
+                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                    .collection("banners").document(text).set(mapOf(
+                                        "id" to newBanner.id,
+                                        "title" to newBanner.title,
+                                        "mediaType" to newBanner.mediaType,
+                                        "section" to newBanner.section,
+                                        "size" to newBanner.size,
+                                        "durationSeconds" to newBanner.durationSeconds,
+                                        "isActive" to newBanner.isActive
+                                    ))
                                 Toast.makeText(context, "تم حفظ وتثبيت البنر الإعلاني بالمقاس المطور وبثّه للبلاد! 📢🌈", Toast.LENGTH_SHORT).show()
                                 bTitle = ""
                             } else {
@@ -1047,6 +1116,8 @@ private fun BannersTabDrawer(banners: MutableList<CustomAdBanner>, theme: ThemeC
                     }
                     IconButton(onClick = {
                         banners.remove(banner)
+                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("banners").document(banner.title).delete()
                         Toast.makeText(context, "تم إتلاف الإعلان وتعطيل حملته.", Toast.LENGTH_SHORT).show()
                     }) {
                         Icon(Icons.Default.Delete, "Dismiss Banner", tint = Color.Red)
@@ -1132,6 +1203,8 @@ private fun ReportsTabDrawer(reports: MutableList<TechnicalReport>, theme: Theme
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = {
                             reports.remove(r)
+                            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                .collection("reports").document(r.id.toString()).delete()
                             Toast.makeText(context, "تم تصفية الشكوى وحفظ الاتفاق بشكل ودي! ☑️", Toast.LENGTH_SHORT).show()
                         }) {
                             Text("تصفية وحفظ الإجراء", color = theme.primary)

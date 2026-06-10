@@ -34,8 +34,8 @@ import androidx.compose.ui.unit.sp
 import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
-import com.example.data.local.AdminConfig
-import com.example.data.local.Provider
+import com.example.data.local.*
+import androidx.compose.ui.text.style.TextOverflow
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,6 +111,7 @@ fun AppNavigationScaffold(viewModel: AppViewModel) {
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .background(Color.White.copy(alpha = config.footerOpacity))
+                        .navigationBarsPadding()
                         .padding(horizontal = 6.dp, vertical = 4.dp)
                 ) {
                     Row(
@@ -162,6 +163,7 @@ fun AppNavigationScaffold(viewModel: AppViewModel) {
 @Composable
 fun DirectoryScreen(viewModel: AppViewModel, config: AdminConfig, onProviderClick: (Provider) -> Unit) {
     val theme = resolveTheme(config)
+    val context = LocalContext.current
     val searchVal by viewModel.searchQuery.collectAsStateWithLifecycle()
     val activeCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val activeCity by viewModel.selectedCity.collectAsStateWithLifecycle()
@@ -188,6 +190,43 @@ fun DirectoryScreen(viewModel: AppViewModel, config: AdminConfig, onProviderClic
 
     // Filter recommended providers for high impact slider
     val recommendedSliderList = providers.filter { it.isRecommended }
+
+    // Banners collection fetched in real-time
+    val activeBanners = remember { mutableStateListOf<CustomAdBanner>() }
+    LaunchedEffect(Unit) {
+        try {
+            val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            firestore.collection("banners")
+                .addSnapshotListener { snapshot, error ->
+                    if (snapshot != null) {
+                        val loaded = mutableListOf<CustomAdBanner>()
+                        for (doc in snapshot.documents) {
+                            try {
+                                val idVal = (doc.getLong("id") ?: 0L).toInt()
+                                val titleStr = doc.getString("title") ?: ""
+                                val mediaTypeStr = doc.getString("mediaType") ?: "صورة"
+                                val sectionStr = doc.getString("section") ?: "الرئيسية"
+                                val sizeStr = doc.getString("size") ?: "عريض L"
+                                val durationInt = (doc.getLong("durationSeconds") ?: 10L).toInt()
+                                val isActiveVal = doc.getBoolean("isActive") ?: true
+                                
+                                if (titleStr.isNotEmpty() && isActiveVal) {
+                                    loaded.add(CustomAdBanner(idVal, titleStr, mediaTypeStr, sectionStr, sizeStr, durationInt, isActiveVal))
+                                }
+                            } catch (ex: Exception) {
+                                ex.printStackTrace()
+                            }
+                        }
+                        if (loaded.isNotEmpty()) {
+                            activeBanners.clear()
+                            activeBanners.addAll(loaded)
+                        }
+                    }
+                }
+        } catch (ex: Exception) {
+            ex.printStackTrace()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(bottom = 36.dp)) {
         Box(
@@ -307,6 +346,75 @@ fun DirectoryScreen(viewModel: AppViewModel, config: AdminConfig, onProviderClic
                         }
                     }
                 }
+            }
+        }
+
+        // --- REAL-TIME LIVE SPONSOR / SYSTEM BANNERS SLIDER ---
+        if (activeBanners.isNotEmpty()) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                Text("📢 إعلانات وخدمات حصرية عاجلة:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = theme.primary)
+                Spacer(modifier = Modifier.height(4.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(activeBanners) { banner ->
+                        Card(
+                            modifier = Modifier
+                                .width(300.dp)
+                                .height(80.dp)
+                                .clickable {
+                                    Toast.makeText(context, "الخدمات الدعائية: ${banner.title}", Toast.LENGTH_SHORT).show()
+                                },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = theme.primary.copy(alpha = 0.08f)),
+                            border = BorderStroke(1.dp, theme.primary.copy(alpha = 0.2f))
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Dynamic Content Icon based on Media Type
+                                Box(
+                                    modifier = Modifier
+                                        .size(45.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(theme.primary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val icon = when (banner.mediaType) {
+                                        "صورة" -> "🌄"
+                                        "فيديو" -> "🎥"
+                                        else -> "📝"
+                                    }
+                                    Text(icon, fontSize = 20.sp)
+                                }
+                                
+                                Spacer(modifier = Modifier.width(10.dp))
+                                
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = banner.title,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = Color.Black,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Badge(containerColor = theme.secondary) {
+                                            Text(banner.size, fontSize = 8.sp, color = Color.Black, fontWeight = FontWeight.Bold)
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("سلايدر ${banner.section}", fontSize = 9.sp, color = Color.Gray)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
             }
         }
 

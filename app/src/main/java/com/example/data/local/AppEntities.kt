@@ -99,3 +99,23 @@ data class AppSupervisor(
     val canViewReports: Boolean = true
 )
 
+data class TechnicalReport(
+    val id: Int,
+    val title: String,
+    val complainant: String,
+    val technician: String,
+    val priority: String, // "High", "Medium", "Low"
+    val date: String,
+    val description: String
+)
+
+data class CustomAdBanner(
+    val id: Int,
+    val title: String,
+    val mediaType: String, // "صورة", "فيديو", "نص"
+    val section: String,   // "الرئيسية", "قائمة الأقسام"
+    val size: String,      // "صغير S", "متوسط M", "عريض L"
+    val durationSeconds: Int,
+    val isActive: Boolean
+)
+
